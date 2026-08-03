@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if page.title %}{{ page.title }} | {% endif %}Skeletor</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="theme-color" content="#0f2b55">
+    <meta name="description" content="Skeletor – an open-source GitHub project template with best-practice structure, documentation and configuration.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'none'; img-src 'self' https://img.shields.io;">
+
+    <link rel="icon" type="image/svg+xml" href="{{ '/assets/icons/favicon.svg' | relative_url }}"/>
+    <link rel="icon" href="{{ '/assets/icons/favicon.ico' | relative_url }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ '/assets/icons/favicon-16x16.png' | relative_url }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ '/assets/icons/favicon-32x32.png' | relative_url }}">
+    <link rel="icon" type="image/png" sizes="96x96" href="{{ '/assets/icons/favicon-96x96.png' | relative_url }}"/>
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ '/assets/icons/apple-touch-icon.png' | relative_url }}">
+    <link rel="manifest" href="{{ '/assets/site.webmanifest' | relative_url }}">
+
+    <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+</head>
+<body>
+<header>
+    <h1>
+        <img src="{{ '/assets/logo.png' | relative_url }}" alt="" class="header-logo"/>
+        Skeletor
+    </h1>
+    <nav aria-label="Main navigation">
+        <a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Overview</a>
+        <a href="https://github.com/drachenpapa/skeletor" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </nav>
+</header>
+
+<main>
+    {{ content }}
+</main>
+
+<footer>
+    <p>&copy; {{ 'now' | date: "%Y" }} <a href="https://github.com/drachenpapa">Drachenpapa</a></p>
+</footer>
+
+</body>
+</html>
