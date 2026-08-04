@@ -1,12 +1,16 @@
+cat <<'JSON' > .devcontainer/devcontainer.json
 {
   "name": "Novachrono",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
 
   "features": {
     "ghcr.io/devcontainers/features/python:1": {
       "version": "3.14"
-    },
-    "ghcr.io/va-h/devcontainers-features/uv:1": {}
+    }
   },
 
   "containerEnv": {
@@ -38,7 +42,6 @@
         }
       }
     }
-  },
-
-  "remoteUser": "vscode"
+  }
 }
+JSON
