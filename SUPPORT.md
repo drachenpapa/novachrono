@@ -4,7 +4,7 @@
 
 ## Support, Bugs & Feature Requests
 
-Use the [GitHub issue tracker](https://github.com/drachenpapa/skeletor/issues/) for bugs, feature requests, and general questions.
+Use the [GitHub issue tracker](https://github.com/drachenpapa/novachrono/issues/) for bugs, feature requests, and general questions.
 Before opening a new issue, quickly check existing issues to see whether it has already been covered.
 
 When reporting a bug, include what you expected, what happened, steps to reproduce, and any relevant logs or screenshots. Good context saves everyone time.

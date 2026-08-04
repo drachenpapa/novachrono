@@ -8,7 +8,7 @@ Please also read the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Bugs & Feature Requests
 
-If you find a bug or miss something that should be included, please [open an issue first](https://github.com/drachenpapa/skeletor/issues).
+If you find a bug or miss something that should be included, please [open an issue first](https://github.com/drachenpapa/novachrono/issues).
 This helps avoid duplicate work or changes that don't fit the project.
 
 For very small fixes (typos, wording, docs), a direct PR is fine.
@@ -32,10 +32,10 @@ This project loosely follows semantic commit messages.
 Examples:
 
 ```text
-feat: add oauth login
-fix: handle missing headers
-docs: update installation guide
-refactor: simplify config loading
+feat: add clock widget renderer
+fix: handle missing event end time
+docs: document local Times Gate setup
+refactor: separate rendering from data loading
 ```
 
 ---
