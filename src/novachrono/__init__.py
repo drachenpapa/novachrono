@@ -1,0 +1,1 @@
+"""Novachrono dashboard renderer."""
