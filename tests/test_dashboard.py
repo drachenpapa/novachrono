@@ -4,7 +4,11 @@ from zoneinfo import ZoneInfo
 import pytest
 from PIL import Image
 
-from novachrono.dashboard import render_dashboard, render_panel
+from novachrono.dashboard import (
+    CLOCK_PANEL_INDEX,
+    render_dashboard,
+    render_panel,
+)
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
 
 
@@ -49,5 +53,32 @@ def test_dashboard_renders_clock_on_center_panel() -> None:
 
     panels = render_dashboard(now)
 
-    assert panels[2].tobytes() != panels[1].tobytes()
-    assert panels[2].tobytes() != panels[3].tobytes()
+    clock_panel = panels[CLOCK_PANEL_INDEX]
+    left_panel = panels[CLOCK_PANEL_INDEX - 1]
+    right_panel = panels[CLOCK_PANEL_INDEX + 1]
+
+    assert clock_panel.tobytes() != left_panel.tobytes()
+    assert clock_panel.tobytes() != right_panel.tobytes()
+
+
+def test_dashboard_is_deterministic_for_given_time() -> None:
+    now = datetime(
+        2026,
+        8,
+        4,
+        13,
+        23,
+        tzinfo=ZoneInfo("Europe/Berlin"),
+    )
+
+    first_dashboard = render_dashboard(now)
+    second_dashboard = render_dashboard(now)
+
+    assert len(first_dashboard) == len(second_dashboard)
+
+    for first_panel, second_panel in zip(
+        first_dashboard,
+        second_dashboard,
+        strict=True,
+    ):
+        assert first_panel.tobytes() == second_panel.tobytes()

@@ -14,13 +14,17 @@ concurrency:
   group: python-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  UV_LINK_MODE: copy
+  UV_VERSION: "0.12.1"
+  PYTHON_VERSION: "3.14"
+
 jobs:
-  quality:
-    name: Quality checks
+  static-analysis:
+    name: Static analysis
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      UV_LINK_MODE: copy
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,12 +32,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          version: "0.12.1"
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: uv.lock
 
       - name: Install Python
-        run: uv python install 3.14
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install project
         run: uv sync --locked --all-groups
@@ -44,11 +48,106 @@ jobs:
       - name: Run linting
         run: uv run ruff check .
 
+      - name: Run security linting
+        run: uv run bandit -r src
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install project
+        run: uv sync --locked --all-groups
+
+      - name: Audit Python dependencies
+        run: uv run pip-audit
+
+  tests:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install project
+        run: uv sync --locked --all-groups
+
       - name: Run tests
         run: uv run pytest
 
+  preview:
+    name: Dashboard preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    needs:
+      - static-analysis
+      - dependency-audit
+      - tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install project
+        run: uv sync --locked --all-groups
+
       - name: Render dashboard preview
-        run: uv run novachrono
+        run: uv run novachrono preview
 
       - name: Verify dashboard preview
-        run: test -f output/dashboard-preview.png
+        shell: python
+        run: |
+          from pathlib import Path
+
+          preview = Path("output/dashboard-preview.png")
+
+          if not preview.is_file():
+              raise SystemExit(
+                  f"Dashboard preview was not created: {preview}"
+              )
+
+          print(f"Dashboard preview exists: {preview}")

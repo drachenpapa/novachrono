@@ -117,7 +117,7 @@ class TimesGateClient:
         )
 
         try:
-            with urlopen(
+            with urlopen(  # nosec B310 - URL scheme is fixed to HTTP by TimesGateConfig.api_url
                 request,
                 timeout=self._config.timeout_seconds,
             ) as response:

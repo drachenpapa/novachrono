@@ -1,7 +1,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from novachrono.__main__ import main
+from novachrono.cli import main
+from novachrono.dashboard import CLOCK_PANEL_INDEX
+from novachrono.design import PANEL_SIZE
 
 
 def test_preview_command_creates_preview(
@@ -21,7 +23,7 @@ def test_preview_command_creates_preview(
     assert destination.exists()
 
 
-@patch("novachrono.__main__.TimesGateClient")
+@patch("novachrono.cli.TimesGateClient")
 def test_check_device_uses_given_configuration(
     mocked_client_class: MagicMock,
 ) -> None:
@@ -45,7 +47,7 @@ def test_check_device_uses_given_configuration(
     mocked_client.get_configuration.assert_called_once_with()
 
 
-@patch("novachrono.__main__.TimesGateClient")
+@patch("novachrono.cli.TimesGateClient")
 def test_send_clock_targets_center_display(
     mocked_client_class: MagicMock,
 ) -> None:
@@ -68,5 +70,8 @@ def test_send_clock_targets_center_display(
 
     call = mocked_client.send_image.call_args
 
-    assert call.kwargs["panel_index"] == 2
-    assert call.kwargs["image"].size == (128, 128)
+    assert call.kwargs["panel_index"] == CLOCK_PANEL_INDEX
+    assert call.kwargs["image"].size == (
+        PANEL_SIZE,
+        PANEL_SIZE,
+    )
