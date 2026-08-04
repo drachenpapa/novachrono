@@ -1,4 +1,6 @@
 from collections.abc import Sequence
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageDraw
 
@@ -11,6 +13,10 @@ from novachrono.design import (
     PANEL_COUNT,
     PANEL_SIZE,
 )
+from novachrono.widgets.clock import render_clock_panel
+
+DEFAULT_TIMEZONE = ZoneInfo("Europe/Berlin")
+CLOCK_PANEL_INDEX = 2
 
 
 def render_panel(index: int) -> Image.Image:
@@ -54,7 +60,15 @@ def render_panel(index: int) -> Image.Image:
     return image
 
 
-def render_dashboard() -> Sequence[Image.Image]:
+def render_dashboard(
+    now: datetime | None = None,
+) -> Sequence[Image.Image]:
     """Render all Times Gate panels."""
 
-    return tuple(render_panel(index) for index in range(PANEL_COUNT))
+    current_time = now or datetime.now(DEFAULT_TIMEZONE)
+
+    panels = [render_panel(index) for index in range(PANEL_COUNT)]
+
+    panels[CLOCK_PANEL_INDEX] = render_clock_panel(current_time)
+
+    return tuple(panels)

@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 from PIL import Image
 
@@ -32,3 +35,19 @@ def test_render_panel_rejects_invalid_index(index: int) -> None:
         match="Panel index must be between",
     ):
         render_panel(index)
+
+
+def test_dashboard_renders_clock_on_center_panel() -> None:
+    now = datetime(
+        2026,
+        8,
+        4,
+        13,
+        23,
+        tzinfo=ZoneInfo("Europe/Berlin"),
+    )
+
+    panels = render_dashboard(now)
+
+    assert panels[2].tobytes() != panels[1].tobytes()
+    assert panels[2].tobytes() != panels[3].tobytes()

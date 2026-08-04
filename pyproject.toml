@@ -16,7 +16,9 @@ keywords = [
     "times-gate",
 ]
 dependencies = [
+    "babel>=2.18.0",
     "pillow>=12.3.0",
+    "tzdata>=2026.3",
 ]
 
 [project.urls]
