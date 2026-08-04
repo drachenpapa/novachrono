@@ -1,38 +1,66 @@
 name: Support request
-description: Ask for help or seek clarification about the project
+description: Ask for help with using or configuring Novachrono
 title: "[SUPPORT] "
-labels: ["question"]
-# TODO (fork): Replace with your own GitHub username(s), or remove this field entirely.
-assignees:
-  - drachenpapa
+labels:
+
+* question
+  assignees:
+* drachenpapa
+
 body:
-  - type: markdown
-    attributes:
-      value: "Before opening a support request, please check [Support & Help](https://github.com/drachenpapa/skeletor/blob/main/SUPPORT.md) and existing issues."
-  - type: textarea
-    id: description
-    attributes:
-      label: Description
-      description: Briefly describe what you need help with or what you don't understand.
-    validations:
-      required: true
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Steps to reproduce
-      description: If applicable, list the steps you took that led to your confusion or problem.
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected behavior
-      description: If applicable, describe what you expected to happen.
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual behavior
-      description: If applicable, describe what actually happened instead.
-  - type: textarea
-    id: additional
-    attributes:
-      label: Additional information
-      description: Add any other context or screenshots about the support request here.
+
+* type: markdown
+  attributes:
+  value: |
+  Before opening a support request, please read the
+  [Support & Help guide](https://github.com/drachenpapa/novachrono/blob/main/SUPPORT.md)
+  and check existing issues.
+
+  ```
+  Do not include access tokens, private calendar URLs, device tokens,
+  credentials, or other sensitive information.
+  ```
+
+* type: textarea
+  id: description
+  attributes:
+  label: What do you need help with?
+  description: Briefly describe what you are trying to achieve and where you are stuck.
+  validations:
+  required: true
+
+* type: textarea
+  id: attempted
+  attributes:
+  label: What have you tried?
+  description: Describe the steps, configuration, or documentation you have already tried.
+
+* type: textarea
+  id: expected
+  attributes:
+  label: Expected result
+  description: Describe what you expected to happen.
+
+* type: textarea
+  id: actual
+  attributes:
+  label: Actual result
+  description: Describe what happened instead.
+
+* type: input
+  id: version
+  attributes:
+  label: Novachrono version
+  placeholder: "e.g. 0.1.0 or a commit hash"
+
+* type: input
+  id: environment
+  attributes:
+  label: Environment
+  placeholder: "e.g. Raspberry Pi OS, Python 3.13, local installation"
+
+* type: textarea
+  id: additional
+  attributes:
+  label: Additional information
+  description: Add relevant logs, screenshots, or preview images after removing sensitive values.

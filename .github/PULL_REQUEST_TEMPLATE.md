@@ -1,32 +1,35 @@
-## Pull request checklist
-Before you submit a pull request, please make sure you have the following:
-<!-- Go over all the following points, and put an `x` in all the boxes that apply.
-If you're unsure about any of these, don't hesitate to ask. -->
-- [ ] My code follows the code style of this project.
-- [ ] I have reviewed and updated the documentation where needed.
-- [ ] I have read the [Contributing Guidelines](https://github.com/drachenpapa/skeletor/blob/main/CONTRIBUTING.md).
+## Summary
+<!-- Briefly explain what this pull request changes and why. -->
 
-## Related Issue
-<!-- For larger changes, please discuss the proposal in an issue first.
-    Very small fixes (for example typos or wording) can be submitted directly.
-    Please link any related issue here when available: -->
-Issue Number: #
+## Related issue
+<!-- Link the related issue when available, for example: Closes #123. -->
+Closes #
 
-## What is the current behavior?
-<!-- Please describe the current behavior that you are modifying. -->
+## Changes
+<!-- List the relevant functional or technical changes. -->
+*
 
-## What is the new behavior?
-<!-- Please describe the behavior or changes that are being added by this PR. -->
+## Verification
+<!-- Explain how the changes were tested or otherwise verified. -->
+* [ ] Existing automated tests pass.
+* [ ] New or changed behavior is covered by tests where appropriate.
+* [ ] I tested the affected behavior locally.
+* [ ] I generated and reviewed dashboard previews when rendering changed.
+* [ ] I tested with a physical Times Gate when device communication changed, or documented why this was not possible.
 
-## Does this introduce a breaking change?
-- [ ] Yes
-- [ ] No
-<!-- If this introduces a breaking change, describe the impact and migration path for existing applications below. -->
+## Checklist
+* [ ] My changes are focused and do not include unrelated cleanup.
+* [ ] My code follows the project conventions.
+* [ ] I updated relevant documentation and examples.
+* [ ] I did not commit credentials, tokens, private URLs, or personal configuration.
+* [ ] I reviewed the [Contributing Guidelines](https://github.com/drachenpapa/novachrono/blob/main/CONTRIBUTING.md).
 
-## Does this deprecate any features?
-- [ ] Yes
-- [ ] No
-<!-- If this deprecates any features, describe the deprecation path for existing applications below. -->
+## Breaking changes
+* [ ] This pull request introduces a breaking change.
+<!-- If checked, explain the impact and migration path. -->
 
-## Other information
-<!-- Any other information that is important to this PR such as screenshots of how the component looks before and after the change. -->
+## Screenshots or previews
+<!-- Add before-and-after images when visual output changed. -->
+
+## Additional information
+<!-- Add relevant implementation notes, limitations, or follow-up work. -->

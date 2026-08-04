@@ -1,22 +1,27 @@
 # ============================================================
-# IDEs & editors
+# IDEs and editors
 # ============================================================
-# IntelliJ IDEA
+# IntelliJ IDEA / PyCharm
 .idea/
 *.iml
 *.iws
 *.ipr
+
+# Visual Studio Code
+.vscode/
 
 # Eclipse
 .project
 .classpath
 .settings/
 
-# VS Code
-.vscode/
+# Editor temporary files
+*.swp
+*.swo
+*~
 
 # ============================================================
-# OS-specific files
+# Operating system files
 # ============================================================
 # Windows
 Thumbs.db
@@ -28,113 +33,21 @@ $RECYCLE.BIN/
 .DS_Store
 .AppleDouble
 .LSOverride
-Icon\r
+Icon?
 ._*
 
-# Linux
-*~
+# Linux / network filesystems
 .nfs*
-
-# ============================================================
-# Other
-# ============================================================
-bin/
-*.swp
-
-# Common build output directory (used by Maven, Gradle, Rust, etc.)
-target/
-
-# ============================================================
-# Go
-# ============================================================
-# Binaries
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binaries
-*.test
-
-# Coverage output
-*.out
-
-# Dependency directory
-vendor/
-
-# Go workspace
-go.work
-go.work.sum
-
-# ============================================================
-# Java
-# ============================================================
-# Compiled class files
-*.class
-
-# Log files
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files
-*.jar
-*.war
-*.ear
-*.nar
-
-# JVM crash logs
-hs_err_pid*
-replay_pid*
-
-# Maven
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-
-# Gradle
-.gradle/
-build/
-
-# ============================================================
-# JavaScript / TypeScript / Node
-# ============================================================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnp/
-.pnp.js
-.yarn/cache
-.yarn/unplugged
-
-# Environment variables (.env.example and .env.sample may be committed)
-.env
-.env.local
-.env.*.local
-
-# Build output
-.next/
-out/
-.cache/
-.parcel-cache/
 
 # ============================================================
 # Python
 # ============================================================
+# Byte-compiled and optimized files
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
 *.pyd
-.Python
 
 # Virtual environments
 .venv/
@@ -142,36 +55,74 @@ venv/
 env/
 ENV/
 
-# Distribution / packaging
+# Distribution and packaging
+build/
 dist/
 *.egg-info/
 *.egg
 .eggs/
 
-# Test & coverage
+# Test and coverage output
 .pytest_cache/
 .tox/
+.nox/
 .coverage
 .coverage.*
 htmlcov/
-nosetests.xml
 coverage.xml
+junit.xml
 
-# Type checkers & linters
+# Type checkers and linters
 .mypy_cache/
+.pyright/
 .ruff_cache/
 .pytype/
 
-# pip
-pip-log.txt
-pip-delete-this-directory.txt
+# Python tooling
+.python-version.local
 
 # Jupyter
 .ipynb_checkpoints/
 
 # ============================================================
-# Rust
+# Environment and local configuration
 # ============================================================
-# Note: target/ is covered in the "Other" section above.
-# Cargo.lock should be committed for applications, not for libraries.
-# Cargo.lock
+.env
+.env.local
+.env.*.local
+
+config.local.yaml
+config.local.yml
+config.local.toml
+secrets.yaml
+secrets.yml
+secrets.toml
+
+# Keep documented examples
+!.env.example
+!config.example.yaml
+!config.example.yml
+!config.example.toml
+
+# ============================================================
+# Novachrono runtime data
+# ============================================================
+# Generated panel and dashboard previews
+preview/
+previews/
+generated/
+output/
+
+# Runtime caches and state
+.cache/
+data/cache/
+data/state/
+
+# Logs
+*.log
+logs/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3

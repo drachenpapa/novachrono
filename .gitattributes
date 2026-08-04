@@ -1,60 +1,44 @@
 * text=auto eol=lf
 
-# Source files
-*.java        text
-*.py          text
-*.js          text
-*.ts          text
-*.jsx         text
-*.tsx         text
-*.go          text
-*.rs          text
+# Python source files
+*.py text
 
-# Windows script files - enforce CRLF line endings
-*.bat         text eol=crlf
-*.cmd         text eol=crlf
-*.ps1         text eol=crlf
+# Configuration and structured data
+*.json text
+*.toml text
+*.yaml text
+*.yml text
+*.cff text
+*.ini text
+*.cfg text
 
-# Config & data files
-*.json        text
-*.yaml        text
-*.yml         text
-*.xml         text
-*.toml        text
-*.cff         text
-*.properties  text
-*.gradle      text
-*.gradle.kts  text
+# Documentation and web content
+*.md text
+*.txt text
+*.html text
+*.css text
+*.svg text
 
-# Web files
-*.html        text
-*.css         text
-*.scss        text
-*.svg         text
+# Shell scripts
+*.sh text eol=lf
 
-# Documentation
-*.md          text
-*.txt         text
+# Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
 
-# Git & editor config
-.gitignore       text
-.gitattributes   text
-.editorconfig    text
+# Repository configuration
+.gitignore text
+.gitattributes text
+.editorconfig text
 
-# Binary files - disable line ending conversion and text diffs
-*.png     binary
-*.jpg     binary
-*.jpeg    binary
-*.gif     binary
-*.ico     binary
-*.webp    binary
-*.jar     binary
-*.war     binary
-*.ear     binary
-*.class   binary
-*.zip     binary
-*.tar     binary
-*.gz      binary
-
-# GitHub Linguist - exclude generated/vendored assets from language stats
-docs/assets/** linguist-vendored
+# Binary image and archive files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.zip binary
+*.tar binary
+*.gz binary
