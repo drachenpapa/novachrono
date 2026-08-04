@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from babel.dates import format_datetime
+from babel.dates import format_date
 from PIL import Image, ImageDraw, ImageFont
 
 from novachrono.design import (
@@ -51,14 +51,16 @@ def render_clock_panel(
     weekday_font = ImageFont.load_default(size=12)
     date_font = ImageFont.load_default(size=11)
 
-    weekday_text = format_datetime(
-        now,
+    local_date = now.date()
+
+    weekday_text = format_date(
+        local_date,
         "EEEE",
         locale=locale,
     ).upper()
 
-    date_text = format_datetime(
-        now,
+    date_text = format_date(
+        local_date,
         "dd. MMM yyyy",
         locale=locale,
     ).upper()

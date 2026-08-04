@@ -60,6 +60,12 @@ class TimesGateClient:
         self._config = config
         self._next_picture_id = int(time.time())
 
+    @property
+    def config(self) -> TimesGateConfig:
+        """Return the client configuration."""
+
+        return self._config
+
     def get_configuration(self) -> dict[str, Any]:
         """Retrieve the current Times Gate configuration."""
 
