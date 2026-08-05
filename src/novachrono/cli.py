@@ -1,8 +1,8 @@
-import argparse
 import json
-import os
-from collections.abc import Sequence
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 from novachrono.dashboard import (
     CLOCK_PANEL_INDEX,
@@ -15,130 +15,150 @@ from novachrono.outputs.times_gate import (
 )
 from novachrono.preview import create_preview, save_preview
 
+app = typer.Typer(
+    name="novachrono",
+    help="Render and send dashboards to a Divoom Times Gate.",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
-def main(arguments: Sequence[str] | None = None) -> int:
-    """Run the Novachrono command-line interface."""
+HostOption = Annotated[
+    str | None,
+    typer.Option(
+        "--host",
+        envvar="NOVACHRONO_TIMES_GATE_HOST",
+        help=(
+            "Times Gate IP address or hostname. Can also be set with NOVACHRONO_TIMES_GATE_HOST."
+        ),
+        metavar="HOST",
+    ),
+]
 
-    parser = _create_parser()
-    parsed_arguments = parser.parse_args(arguments)
+TokenOption = Annotated[
+    str | None,
+    typer.Option(
+        "--token",
+        envvar="NOVACHRONO_TIMES_GATE_TOKEN",
+        help=("Times Gate local token. Can also be set with NOVACHRONO_TIMES_GATE_TOKEN."),
+        metavar="TOKEN",
+    ),
+]
+
+
+@app.command()
+def preview(
+    output: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Destination for the generated dashboard preview.",
+            dir_okay=False,
+        ),
+    ] = Path("output/dashboard-preview.png"),
+) -> None:
+    """Render the complete dashboard preview as a PNG file."""
+
+    panels = render_dashboard()
+    dashboard_preview = create_preview(panels)
+    save_preview(dashboard_preview, output)
+
+    typer.echo(f"Dashboard preview written to {output}")
+
+
+@app.command(name="check-device")
+def check_device(
+    host: HostOption = None,
+    token: TokenOption = None,
+) -> None:
+    """Check the connection to the configured Times Gate."""
+
+    client = _create_times_gate_client(
+        host=host,
+        local_token=token,
+    )
+
+    typer.echo(f"Connecting to {client.config.api_url} ...")
 
     try:
-        return parsed_arguments.handler(parsed_arguments)
-    except KeyError as error:
-        variable_name = error.args[0]
-        parser.error(f"Required environment variable is missing: {variable_name}")
-    except (TimesGateError, ValueError) as error:
-        parser.error(str(error))
+        response = client.get_configuration()
+    except TimesGateError as error:
+        _exit_with_error(str(error))
 
-    return 2
-
-
-def _create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="novachrono",
-        description="Render and send dashboards to a Divoom Times Gate.",
+    typer.echo("Connection successful.")
+    typer.echo(
+        json.dumps(
+            response,
+            indent=2,
+            ensure_ascii=False,
+        )
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True,
-    )
 
-    preview_parser = subparsers.add_parser(
-        "preview",
-        help="Render a dashboard preview as a PNG file.",
-    )
-    preview_parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("output/dashboard-preview.png"),
-        help=("Destination for the preview image (default: output/dashboard-preview.png)."),
-    )
-    preview_parser.set_defaults(handler=_run_preview)
-
-    check_parser = subparsers.add_parser(
-        "check-device",
-        help="Check the connection to the configured Times Gate.",
-    )
-    _add_device_arguments(check_parser)
-    check_parser.set_defaults(handler=_run_check_device)
-
-    send_clock_parser = subparsers.add_parser(
-        "send-clock",
-        help="Render and send the clock to the center display.",
-    )
-    _add_device_arguments(send_clock_parser)
-    send_clock_parser.set_defaults(handler=_run_send_clock)
-
-    return parser
-
-
-def _add_device_arguments(
-    parser: argparse.ArgumentParser,
+@app.command(name="send-clock")
+def send_clock(
+    host: HostOption = None,
+    token: TokenOption = None,
 ) -> None:
-    parser.add_argument(
-        "--host",
-        help=("Times Gate IP address or hostname. Defaults to NOVACHRONO_TIMES_GATE_HOST."),
+    """Render and send the clock to the center display."""
+
+    client = _create_times_gate_client(
+        host=host,
+        local_token=token,
     )
-    parser.add_argument(
-        "--token",
-        help=("Times Gate local token. Defaults to NOVACHRONO_TIMES_GATE_TOKEN."),
-    )
-
-
-def _run_preview(arguments: argparse.Namespace) -> int:
-    panels = render_dashboard()
-    preview = create_preview(panels)
-
-    destination: Path = arguments.output
-    save_preview(preview, destination)
-
-    print(f"Dashboard preview written to {destination}")
-    return 0
-
-
-def _run_check_device(arguments: argparse.Namespace) -> int:
-    client = _create_times_gate_client(arguments)
-
-    print(f"Connecting to {client.config.api_url} ...")
-
-    response = client.get_configuration()
-
-    print("Connection successful.")
-    print(json.dumps(response, indent=2, ensure_ascii=False))
-
-    return 0
-
-
-def _run_send_clock(arguments: argparse.Namespace) -> int:
-    client = _create_times_gate_client(arguments)
 
     panels = render_dashboard()
     clock_panel = panels[CLOCK_PANEL_INDEX]
-
     display_number = CLOCK_PANEL_INDEX + 1
-    print(f"Sending clock to display {display_number} ...")
 
-    response = client.send_image(
-        panel_index=CLOCK_PANEL_INDEX,
-        image=clock_panel,
+    typer.echo(f"Sending clock to display {display_number} ...")
+
+    try:
+        response = client.send_image(
+            panel_index=CLOCK_PANEL_INDEX,
+            image=clock_panel,
+        )
+    except TimesGateError as error:
+        _exit_with_error(str(error))
+
+    typer.echo("Clock sent successfully.")
+    typer.echo(
+        json.dumps(
+            response,
+            indent=2,
+            ensure_ascii=False,
+        )
     )
-
-    print("Clock sent successfully.")
-    print(json.dumps(response, indent=2, ensure_ascii=False))
-
-    return 0
 
 
 def _create_times_gate_client(
-    arguments: argparse.Namespace,
+    *,
+    host: str | None,
+    local_token: str | None,
 ) -> TimesGateClient:
-    host = arguments.host or os.environ["NOVACHRONO_TIMES_GATE_HOST"]
-    local_token = arguments.token or os.environ["NOVACHRONO_TIMES_GATE_TOKEN"]
+    missing_variables: list[str] = []
 
-    config = TimesGateConfig(
-        host=host,
-        local_token=local_token,
-    )
+    if host is None:
+        missing_variables.append("NOVACHRONO_TIMES_GATE_HOST")
+
+    if local_token is None:
+        missing_variables.append("NOVACHRONO_TIMES_GATE_TOKEN")
+
+    if missing_variables:
+        joined_variables = ", ".join(missing_variables)
+        _exit_with_error(f"Missing required configuration: {joined_variables}")
+
+    try:
+        config = TimesGateConfig(
+            host=host,
+            local_token=local_token,
+        )
+    except ValueError as error:
+        _exit_with_error(str(error))
 
     return TimesGateClient(config)
+
+
+def _exit_with_error(message: str) -> None:
+    typer.echo(f"Error: {message}", err=True)
+    raise typer.Exit(code=1)

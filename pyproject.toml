@@ -18,6 +18,7 @@ keywords = [
 dependencies = [
     "babel>=2.18.0",
     "pillow>=12.3.0",
+    "typer>=0.27.1",
     "tzdata>=2026.3",
 ]
 
@@ -27,7 +28,7 @@ Repository = "https://github.com/drachenpapa/novachrono"
 Issues = "https://github.com/drachenpapa/novachrono/issues"
 
 [project.scripts]
-novachrono = "novachrono.cli:main"
+novachrono = "novachrono.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]
