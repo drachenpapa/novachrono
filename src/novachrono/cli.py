@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 
@@ -131,6 +131,51 @@ def send_clock(
     )
 
 
+@app.command(name="send-dashboard")
+def send_dashboard(
+    host: HostOption = None,
+    token: TokenOption = None,
+) -> None:
+    """Render and send all five dashboard panels."""
+
+    client = _create_times_gate_client(
+        host=host,
+        local_token=token,
+    )
+
+    panels = render_dashboard()
+    failed_displays: list[int] = []
+
+    typer.echo(f"Sending dashboard to {len(panels)} displays at {client.config.api_url} ...")
+
+    for panel_index, panel in enumerate(panels):
+        display_number = panel_index + 1
+
+        typer.echo(f"Sending display {display_number}/{len(panels)} ...")
+
+        try:
+            client.send_image(
+                panel_index=panel_index,
+                image=panel,
+            )
+        except TimesGateError as error:
+            failed_displays.append(display_number)
+            typer.echo(
+                f"Display {display_number} failed: {error}",
+                err=True,
+            )
+            continue
+
+        typer.echo(f"Display {display_number} sent successfully.")
+
+    if failed_displays:
+        formatted_displays = ", ".join(str(display_number) for display_number in failed_displays)
+
+        _exit_with_error(f"Dashboard delivery failed for display(s): {formatted_displays}")
+
+    typer.echo("Dashboard sent successfully.")
+
+
 def _create_times_gate_client(
     *,
     host: str | None,
@@ -159,6 +204,6 @@ def _create_times_gate_client(
     return TimesGateClient(config)
 
 
-def _exit_with_error(message: str) -> None:
+def _exit_with_error(message: str) -> NoReturn:
     typer.echo(f"Error: {message}", err=True)
     raise typer.Exit(code=1)
