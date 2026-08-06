@@ -1,18 +1,25 @@
+import math
 from datetime import datetime
 
-from babel.dates import format_date
 from PIL import Image, ImageDraw, ImageFont
 
 from novachrono.design import (
-    HEADER_ICON_SIZE,
-    MUTED_TEXT_COLOR,
+    FRAME_ACCENT_COLOR,
+    FRAME_DIM_COLOR,
+    PANEL_SIZE,
     TEXT_COLOR,
     create_panel,
     draw_centered_text,
-    draw_widget_header,
 )
 
-CLOCK_ACCENT_COLOR = "#D36BFF"
+CLOCK_TITLE = "NOVACHRONO"
+
+CLOCK_CENTER_X = PANEL_SIZE // 2
+CLOCK_CENTER_Y = 65
+
+CLOCK_OUTER_RADIUS = 32
+CLOCK_MIDDLE_RADIUS = 28
+CLOCK_INNER_RADIUS = 24
 
 
 def render_clock_panel(
@@ -20,42 +27,27 @@ def render_clock_panel(
     *,
     locale: str = "de_DE",
 ) -> Image.Image:
-    """Render a clock panel for a timezone-aware datetime."""
+    """Render the Novachrono clock panel."""
+
+    del locale
 
     if now.tzinfo is None or now.utcoffset() is None:
-        raise ValueError("Clock widget requires a timezone-aware datetime")
+        raise ValueError(
+            "Clock widget requires a timezone-aware datetime"
+        )
 
     image = create_panel()
     draw = ImageDraw.Draw(image)
 
-    draw_widget_header(
-        draw,
-        title="UHR",
-        accent_color=CLOCK_ACCENT_COLOR,
-        icon=_draw_clock_icon,
-    )
+    _draw_title(draw)
+    _draw_clock_ring(draw)
 
-    time_font = ImageFont.load_default(size=29)
-    weekday_font = ImageFont.load_default(size=12)
+    time_font = ImageFont.load_default(size=32)
     date_font = ImageFont.load_default(size=11)
-
-    local_date = now.date()
-
-    weekday_text = format_date(
-        local_date,
-        "EEEE",
-        locale=locale,
-    ).upper()
-
-    date_text = format_date(
-        local_date,
-        "dd. MMM yyyy",
-        locale=locale,
-    ).upper()
 
     draw_centered_text(
         draw,
-        y=48,
+        y=46,
         text=now.strftime("%H:%M"),
         font=time_font,
         fill=TEXT_COLOR,
@@ -63,63 +55,180 @@ def render_clock_panel(
 
     draw_centered_text(
         draw,
-        y=82,
-        text=weekday_text,
-        font=weekday_font,
-        fill=CLOCK_ACCENT_COLOR,
-    )
-
-    draw_centered_text(
-        draw,
-        y=103,
-        text=date_text,
+        y=102,
+        text=now.strftime("%d.%m.%Y"),
         font=date_font,
-        fill=MUTED_TEXT_COLOR,
+        fill=TEXT_COLOR,
     )
 
     return image
 
 
-def _draw_clock_icon(
+def _draw_title(
     draw: ImageDraw.ImageDraw,
-    origin: tuple[int, int],
-    accent_color: str,
 ) -> None:
-    left, top = origin
-    radius = HEADER_ICON_SIZE // 2
+    title_font = ImageFont.load_default(size=11)
 
-    center_x = left + radius
-    center_y = top + radius
-
-    draw.ellipse(
-        (
-            left,
-            top,
-            left + HEADER_ICON_SIZE,
-            top + HEADER_ICON_SIZE,
-        ),
-        outline=accent_color,
-        width=2,
+    bounding_box = draw.textbbox(
+        (0, 0),
+        CLOCK_TITLE,
+        font=title_font,
     )
 
-    draw.line(
-        (
-            center_x,
-            center_y,
-            center_x,
-            center_y - 5,
-        ),
+    title_width = bounding_box[2] - bounding_box[0]
+    title_x = (PANEL_SIZE - title_width) // 2 - bounding_box[0]
+
+    draw.text(
+        (title_x, 18),
+        CLOCK_TITLE,
+        font=title_font,
         fill=TEXT_COLOR,
+    )
+
+    divider_y = 30
+    divider_gap = 4
+
+    left_line_end = title_x - divider_gap
+    right_line_start = title_x + title_width + divider_gap
+
+    if left_line_end > 17:
+        draw.line(
+            (
+                17,
+                divider_y,
+                left_line_end,
+                divider_y,
+            ),
+            fill=FRAME_ACCENT_COLOR,
+            width=1,
+        )
+
+    if right_line_start < PANEL_SIZE - 17:
+        draw.line(
+            (
+                right_line_start,
+                divider_y,
+                PANEL_SIZE - 17,
+                divider_y,
+            ),
+            fill=FRAME_ACCENT_COLOR,
+            width=1,
+        )
+
+
+def _draw_clock_ring(
+    draw: ImageDraw.ImageDraw,
+) -> None:
+    outer_box = _circle_box(CLOCK_OUTER_RADIUS)
+    middle_box = _circle_box(CLOCK_MIDDLE_RADIUS)
+    inner_box = _circle_box(CLOCK_INNER_RADIUS)
+
+    draw.ellipse(
+        outer_box,
+        outline=FRAME_DIM_COLOR,
         width=1,
     )
 
+    draw.ellipse(
+        middle_box,
+        outline=FRAME_DIM_COLOR,
+        width=1,
+    )
+
+    draw.arc(
+        outer_box,
+        start=205,
+        end=335,
+        fill=FRAME_ACCENT_COLOR,
+        width=2,
+    )
+
+    draw.arc(
+        outer_box,
+        start=25,
+        end=155,
+        fill=FRAME_ACCENT_COLOR,
+        width=2,
+    )
+
+    draw.arc(
+        inner_box,
+        start=215,
+        end=325,
+        fill=FRAME_ACCENT_COLOR,
+        width=1,
+    )
+
+    draw.arc(
+        inner_box,
+        start=35,
+        end=145,
+        fill=FRAME_ACCENT_COLOR,
+        width=1,
+    )
+
+    for angle in range(0, 360, 20):
+        _draw_tick(
+            draw,
+            angle_degrees=angle,
+            major=angle % 60 == 0,
+        )
+
+
+def _circle_box(
+    radius: int,
+) -> tuple[int, int, int, int]:
+    return (
+        CLOCK_CENTER_X - radius,
+        CLOCK_CENTER_Y - radius,
+        CLOCK_CENTER_X + radius,
+        CLOCK_CENTER_Y + radius,
+    )
+
+
+def _draw_tick(
+    draw: ImageDraw.ImageDraw,
+    *,
+    angle_degrees: int,
+    major: bool,
+) -> None:
+    angle_radians = math.radians(
+        angle_degrees - 90
+    )
+
+    outer_radius = CLOCK_OUTER_RADIUS + 2
+    tick_length = 5 if major else 3
+    inner_radius = outer_radius - tick_length
+
+    outer_x = round(
+        CLOCK_CENTER_X
+        + math.cos(angle_radians) * outer_radius
+    )
+    outer_y = round(
+        CLOCK_CENTER_Y
+        + math.sin(angle_radians) * outer_radius
+    )
+
+    inner_x = round(
+        CLOCK_CENTER_X
+        + math.cos(angle_radians) * inner_radius
+    )
+    inner_y = round(
+        CLOCK_CENTER_Y
+        + math.sin(angle_radians) * inner_radius
+    )
+
     draw.line(
         (
-            center_x,
-            center_y,
-            center_x + 4,
-            center_y + 2,
+            inner_x,
+            inner_y,
+            outer_x,
+            outer_y,
         ),
-        fill=TEXT_COLOR,
+        fill=(
+            FRAME_ACCENT_COLOR
+            if major
+            else FRAME_DIM_COLOR
+        ),
         width=1,
     )
