@@ -2,41 +2,40 @@
 
 Novachrono is a self-hosted dashboard renderer for the [Divoom Times Gate](https://divoom.com/).
 
-It renders a consistent five-screen dashboard, generates local previews, and sends individual panel images to the Times Gate through its local network API.
+It renders a consistent five-screen dashboard, generates local previews, and sends individual or complete dashboard panels to a Times Gate through its local network API.
 
 > Novachrono is currently in an early development stage. Features, configuration, and architecture may change before the first stable release.
 
 ## Current Status
 
-The following functionality is already available:
+The following functionality is currently available:
 
 - rendering of five 128 × 128 pixel panels
+- shared custom HUD-style visual design
+- current weather widget using live Open-Meteo data
+- Celsius and Fahrenheit display support
+- German and English UI localization
+- clock and date widget
+- Pokémon GO raid boss widget using live ScrapedDuck and PokéAPI data
 - combined local dashboard preview
-- localized clock and date widget
 - targeted image upload to individual Times Gate displays
+- complete five-display dashboard upload
 - local Times Gate connection check
+- `.env`-based configuration
 - command-line interface powered by Typer
 - automated tests with pytest
 - formatting and linting with Ruff
 - security checks with Bandit and pip-audit
-- CI on Windows and Linux
-- software bill of materials generation
 
-The current dashboard uses the center display for the clock. The remaining panels are placeholders until additional widgets are implemented.
+The current display assignment is:
 
-## Planned Dashboard
-
-The first complete dashboard is expected to use the five Times Gate displays approximately as follows:
-
-1. **Current weather**
-2. **Weather forecast**
+1. **Placeholder**
+2. **Current weather**
 3. **Clock and date**
-4. **GitHub status**
-5. **Pokémon GO events, calendar information, or system status**
+4. **Pokémon GO raids**
+5. **Placeholder**
 
-The final display assignment should eventually become configurable.
-
-All screens should share a consistent custom Novachrono design rather than reproduce the standard Divoom dashboard.
+All panels use the same custom Novachrono design rather than reproducing the standard Divoom dashboard.
 
 ## Goals
 
@@ -45,11 +44,11 @@ Novachrono aims to provide:
 - a coherent visual interface across all five Times Gate displays
 - independently rendered 128 × 128 pixel widgets
 - local previews without requiring a physical Times Gate
-- configurable data sources and update intervals
+- configurable data sources and display settings
 - resilient handling of unavailable APIs and network services
 - simple deployment on a Raspberry Pi or another always-on device
 - a small and understandable Python codebase
-- clear separation between data retrieval, rendering, and device communication
+- clear separation between rendering, configuration, data retrieval, and device communication
 
 ## Non-Goals
 
@@ -74,9 +73,10 @@ It runs on another device in the same local network:
 External data sources
         |
         v
-Novachrono
+   Novachrono
         |
-        +-- loads and normalizes data
+        +-- loads configuration
+        +-- retrieves and normalizes data
         +-- renders five 128 x 128 pixel images
         +-- generates a local dashboard preview
         +-- sends selected images to the Times Gate
@@ -87,60 +87,161 @@ Divoom Times Gate
 
 Each Times Gate display can be updated independently.
 
-The current implementation already supports sending a rendered image to a selected display. Automatic update scheduling and change detection are planned.
+The current implementation can send individual rendered panels or the complete dashboard. Automatic scheduling, change detection, retries, and recovery behavior are planned.
 
 ## Architecture
 
-The current source structure separates the main responsibilities:
+The source tree separates the main responsibilities:
 
 ```text
 src/novachrono/
+├── __init__.py
+├── __main__.py
 ├── cli.py
+├── config.py
 ├── dashboard.py
-├── design.py
+├── i18n.py
+├── pokemon_go.py
 ├── preview.py
+├── units.py
+├── weather.py
+├── design/
+│   ├── __init__.py
+│   ├── components.py
+│   └── theme.py
 ├── outputs/
+│   ├── __init__.py
 │   └── times_gate.py
+├── sources/
+│   ├── __init__.py
+│   ├── open_meteo.py
+│   ├── pokeapi.py
+│   ├── pokemon_artwork.py
+│   └── scraped_duck.py
 └── widgets/
-    └── clock.py
+    ├── __init__.py
+    ├── clock.py
+    ├── pokemon_go/
+    │   ├── __init__.py
+    │   └── raid_bosses.py
+    └── weather/
+        ├── __init__.py
+        ├── current.py
+        └── icons.py
 ```
 
 ### Widgets
 
 Widgets render 128 × 128 pixel Pillow images.
 
-They should not communicate directly with external APIs or the Times Gate.
+They do not communicate directly with the Times Gate.
 
-Current widget:
+Current widgets:
 
-- clock and localized date
+- current weather
+- clock and date
+- Pokémon GO raids
 
 Planned widgets include:
 
-- current weather
-- weather forecast
 - GitHub status
-- Pokémon GO events
 - calendar information
 - system status
+
+### Weather Data
+
+Current weather data is provided by [Open-Meteo](https://open-meteo.com/).
+
+Novachrono retrieves current temperature, weather conditions, daily high and low
+temperatures, precipitation probability, and day/night information. Provider-specific
+weather codes are normalized before they reach the widget renderer.
+
+Open-Meteo data is provided under the
+[CC BY 4.0 license](https://creativecommons.org/licenses/by/4.0/).
+
+### Design
+
+The `design` package contains visual elements shared between widgets:
+
+- common HUD frame
+- widget headers
+- colors
+- panel dimensions
+- reusable design constants
+
+Widget-specific geometry remains inside the corresponding widget unless it becomes genuinely reusable.
 
 ### Dashboard
 
 The dashboard renderer creates the five panel images and assigns widgets to displays.
 
-The clock currently occupies the center display, which uses panel index `2`.
+Current assignments:
+
+```text
+Panel index 0 -> placeholder
+Panel index 1 -> weather
+Panel index 2 -> clock
+Panel index 3 -> pokemon_go
+Panel index 4 -> placeholder
+```
+
+The physical displays are therefore numbered 1 through 5, while the internal panel indices range from 0 through 4.
+
+### Configuration
+
+`config.py` loads application settings from:
+
+1. `.env`
+2. process environment variables
+
+Process environment variables override values from `.env`.
+
+Configuration is normalized into an immutable `AppConfig` before it is used by the application.
+
+### Internationalization
+
+Small UI strings are translated through `i18n.py`.
+
+Currently supported locales:
+
+```text
+de_DE
+en_US
+```
+
+The current localized widget text is the weather title:
+
+```text
+de_DE -> WETTER
+en_US -> WEATHER
+```
+
+The clock currently uses a numeric time and date representation and therefore does not require locale-specific date formatting.
+
+### Units
+
+Temperatures are stored internally as Celsius values.
+
+The display unit can be configured as:
+
+```text
+C
+F
+```
+
+Fahrenheit values are converted during rendering. Weather typography adapts to wider values such as negative temperatures and three-digit Fahrenheit temperatures.
 
 ### Preview
 
 The preview module combines all five panel images into one PNG file for local inspection.
 
-This allows most visual development and automated testing without access to physical hardware.
+This allows visual development and most automated testing without access to physical hardware.
 
 ### Output Adapters
 
 Output adapters deliver rendered images to external destinations.
 
-The current Times Gate adapter:
+The Times Gate adapter:
 
 - communicates through the local Times Gate HTTP API
 - validates panel numbers and image dimensions
@@ -150,19 +251,28 @@ The current Times Gate adapter:
 
 ### Command-Line Interface
 
-The CLI provides commands for rendering previews, checking the device connection, and sending the clock widget.
+The CLI is implemented with Typer.
 
-It is implemented with Typer.
+Current commands:
+
+```text
+preview
+check-device
+send-clock
+send-weather
+send-pokemon
+send-dashboard
+```
 
 ## Requirements
 
 - Python 3.14
 - [uv](https://docs.astral.sh/uv/)
-- a Divoom Times Gate connected to the same local network
+- a Divoom Times Gate connected to the same local network for device-related commands
 - local API access enabled in the Divoom application
 - a local Times Gate token
 
-The project includes `tzdata` so that IANA time zones such as `Europe/Berlin` also work on Windows.
+The project includes `tzdata` so that IANA time zones such as `Europe/Berlin` also work consistently on platforms such as Windows.
 
 ## Installation
 
@@ -173,7 +283,7 @@ git clone https://github.com/drachenpapa/novachrono.git
 cd novachrono
 ```
 
-Install the locked dependencies:
+Install the locked project and development dependencies:
 
 ```shell
 uv sync --locked --all-groups
@@ -187,48 +297,154 @@ uv run novachrono --help
 
 ## Configuration
 
-The Times Gate connection is currently configured through environment variables:
+Novachrono automatically loads a `.env` file from the current working directory.
 
-```text
-NOVACHRONO_TIMES_GATE_HOST
-NOVACHRONO_TIMES_GATE_TOKEN
-```
-
-The host must contain only the IP address or hostname, without `http://`, a port, or an API path.
+Create your local configuration from the provided example:
 
 ### PowerShell
 
 ```powershell
-$env:NOVACHRONO_TIMES_GATE_HOST = "192.168.x.x"
-$env:NOVACHRONO_TIMES_GATE_TOKEN = "replace-me"
+Copy-Item .env.example .env
 ```
 
 ### Bash or Zsh
 
 ```shell
-export NOVACHRONO_TIMES_GATE_HOST="192.168.x.x"
-export NOVACHRONO_TIMES_GATE_TOKEN="replace-me"
+cp .env.example .env
 ```
 
-Command-line options may also override these values:
+The currently supported settings are:
+
+```dotenv
+NOVACHRONO_LOCALE=de_DE
+NOVACHRONO_TIMEZONE=Europe/Berlin
+NOVACHRONO_TEMPERATURE_UNIT=C
+
+NOVACHRONO_WEATHER_LATITUDE=53.04771
+NOVACHRONO_WEATHER_LONGITUDE=8.80169
+
+NOVACHRONO_TIMES_GATE_HOST=192.168.1.100
+NOVACHRONO_TIMES_GATE_TOKEN=replace-me
+```
+
+### Locale
+
+Supported values:
+
+```text
+de_DE
+en_US
+```
+
+Default:
+
+```text
+de_DE
+```
+
+### Timezone
+
+Use an IANA timezone name such as:
+
+```text
+Europe/Berlin
+Europe/London
+America/New_York
+```
+
+Default:
+
+```text
+Europe/Berlin
+```
+
+### Temperature Unit
+
+Supported values:
+
+```text
+C
+F
+```
+
+The configuration parser also accepts the aliases:
+
+```text
+CELSIUS
+FAHRENHEIT
+```
+
+Values are case-insensitive.
+
+Default:
+
+```text
+C
+```
+
+### Weather Location
+
+Weather data is retrieved for the configured WGS84 coordinates:
+
+```text
+NOVACHRONO_WEATHER_LATITUDE
+NOVACHRONO_WEATHER_LONGITUDE
+```
+
+### Times Gate Host
+
+The host must contain only the local IP address or hostname.
+
+Correct:
+
+```text
+192.168.1.100
+times-gate.local
+```
+
+Do not include:
+
+```text
+http://
+https://
+:9000
+/divoom_api
+```
+
+### Times Gate Token
+
+The local Times Gate token is required for commands that communicate with the physical device.
+
+Do not commit a real token.
+
+### Environment Overrides
+
+Process environment variables override values from `.env`.
+
+For example:
+
+```powershell
+$env:NOVACHRONO_TEMPERATURE_UNIT = "F"
+uv run novachrono preview
+```
+
+The Times Gate host and token can additionally be overridden through command-line options:
 
 ```shell
-uv run novachrono check-device --host 192.168.x.x --token replace-me
+uv run novachrono check-device --host 192.168.1.100 --token replace-me
 ```
 
-Using `--token` regularly is discouraged because the value may be stored in shell history.
-
-Never commit the real local token, IP-specific configuration, private API keys, or personal feed URLs.
+Using `--token` regularly is discouraged because command-line arguments may be stored in shell history or exposed to other processes.
 
 ## Usage
 
-### Show available commands
+### Show Available Commands
 
 ```shell
 uv run novachrono --help
 ```
 
-### Generate a local dashboard preview
+### Generate a Local Dashboard Preview
 
 ```shell
 uv run novachrono preview
@@ -252,23 +468,55 @@ or:
 uv run novachrono preview -o output/custom-preview.png
 ```
 
-### Check the Times Gate connection
+A physical Times Gate is not required to generate previews.
+
+### Check the Times Gate Connection
 
 ```shell
 uv run novachrono check-device
 ```
 
-This sends a read-only configuration request to the locally configured Times Gate.
+This sends a read-only configuration request to the configured Times Gate.
 
-### Send the clock widget
+### Send the Clock Widget
 
 ```shell
 uv run novachrono send-clock
 ```
 
-This renders the current clock panel and sends it to display 3.
+The clock is currently assigned to physical display 3.
 
-### Run as a Python module
+### Send the Weather Widget
+
+```shell
+uv run novachrono send-weather
+```
+
+The weather widget is currently assigned to physical display 2.
+
+Weather data is retrieved from Open-Meteo using the configured coordinates.
+
+### Send the Pokémon GO Widget
+
+```shell
+uv run novachrono send-pokemon
+```
+
+The Pokémon GO widget is currently assigned to physical display 4.
+
+Raid data is retrieved from ScrapedDuck. Boss artwork is retrieved from the PokéAPI.
+
+### Send the Complete Dashboard
+
+```shell
+uv run novachrono send-dashboard
+```
+
+This renders all five panels and sends them to the Times Gate one after another.
+
+If one or more displays fail, Novachrono reports the affected display numbers.
+
+### Run as a Python Module
 
 The package also supports:
 
@@ -278,7 +526,7 @@ uv run python -m novachrono preview
 
 ## Local Development
 
-Install all project and development dependencies:
+Install the project and all development dependencies:
 
 ```shell
 uv sync --locked --all-groups
@@ -320,7 +568,13 @@ Run the test suite:
 uv run pytest
 ```
 
-Run all common local checks:
+Generate a dashboard preview:
+
+```shell
+uv run novachrono preview
+```
+
+A typical complete local verification is:
 
 ```shell
 uv run ruff format --check .
@@ -331,47 +585,44 @@ uv run pytest
 uv run novachrono preview
 ```
 
-Most tests do not require access to a physical Times Gate. Network calls are mocked in the test suite.
+Most tests do not require access to a physical Times Gate. Network calls to the device are mocked in the test suite.
 
-## Continuous Integration
+## Testing
 
-GitHub Actions currently performs:
+The test suite currently covers:
 
-- Ruff formatting checks
-- Ruff linting
-- Bandit security analysis
-- dependency auditing with pip-audit
-- tests on Ubuntu and Windows
-- dashboard preview generation
-- pull-request dependency review
-- SBOM generation
+- CLI behavior
+- application configuration
+- Celsius and Fahrenheit conversion
+- negative and three-digit temperatures
+- internationalization
+- dashboard composition
+- weather rendering
+- Open-Meteo request, response, and weather-code handling
+- clock rendering
+- shared design invariants
+- preview generation
+- Times Gate request generation
+- Times Gate response and error handling
 
-CI does not connect to a real Times Gate and does not require device credentials.
+Renderer tests focus primarily on behavior and deterministic output instead of maintaining large fragile pixel snapshots.
 
-## Environment Example
-
-An `.env.example` file documents the required connection values:
-
-```dotenv
-NOVACHRONO_TIMES_GATE_HOST=192.168.x.x
-NOVACHRONO_TIMES_GATE_TOKEN=replace-me
-```
-
-Novachrono does not currently load `.env` files automatically. The file serves as a configuration example only.
+A small targeted pixel regression test protects the continuity of the shared HUD frame because this has previously been a real rendering regression.
 
 ## Security
 
-Do not commit:
+Never commit:
 
 - Divoom local tokens
 - GitHub personal access tokens
-- weather API keys
 - private calendar feed URLs
 - credentials
-- local environment files
-- configuration containing personal data
+- `.env`
+- local configuration containing personal data
 
-If a real token was accidentally committed, remove it from use and generate or configure a replacement where possible. Removing it only from the latest source file does not remove it from Git history.
+`.env.example` contains documentation values only and is intended to remain in version control.
+
+If a real token is accidentally committed, revoke or replace it where possible. Removing the token only from the latest source file does not remove it from Git history.
 
 Potential security issues should be reported according to the [Security Policy](SECURITY.md).
 
@@ -381,17 +632,34 @@ Potential security issues should be reported according to the [Security Policy](
 
 - [x] create Python project structure
 - [x] render five 128 × 128 panels
+- [x] create a shared Novachrono HUD design
 - [x] generate a combined dashboard preview
 - [x] add automated formatting, linting, testing, and security checks
 - [x] add a Typer-based CLI
+- [x] add `.env`-based configuration
+- [x] add basic internationalization
+- [x] add configurable Celsius and Fahrenheit rendering
 
 ### Clock Widget
 
 - [x] render current time and date
-- [x] localize weekday and date with Babel
 - [x] place the clock on display 3
-- [ ] refine typography and spacing on the physical display
-- [ ] extract shared widget-rendering primitives
+- [x] refine typography and spacing for the physical display
+- [x] integrate the shared HUD frame
+
+### Weather Widget
+
+- [x] create current-weather widget
+- [x] render weather conditions with custom icons
+- [x] render current temperature
+- [x] render high and low temperatures
+- [x] render precipitation probability
+- [x] support Celsius and Fahrenheit
+- [x] support localized widget title
+- [x] refine layout for the physical display
+- [x] connect a real weather data source
+- [x] map provider weather conditions to the internal weather model
+- [x] remove demo weather data
 
 ### Times Gate Integration
 
@@ -399,18 +667,16 @@ Potential security issues should be reported according to the [Security Policy](
 - [x] authenticate with the local token
 - [x] check device connectivity
 - [x] send an image to an individual display
-- [ ] send the complete dashboard
+- [x] send the complete dashboard
 - [ ] avoid sending unchanged images
 - [ ] add retry and recovery behavior
 
-### External Data
+### Additional Widgets
 
-- [ ] implement a weather data service
-- [ ] render current weather
-- [ ] render a weather forecast
+- [x] research a reliable Pokémon GO event data source
+- [x] render current raid information
+- [x] render Pokémon GO raid bosses widget
 - [ ] implement GitHub status data
-- [ ] render assigned issues, pull requests, or workflow status
-- [ ] research a reliable Pokémon GO event data source
 - [ ] add configurable calendar or system-status widgets
 
 ### Runtime and Deployment
@@ -427,46 +693,13 @@ Potential security issues should be reported according to the [Security Policy](
 
 Future configuration may include:
 
-- Times Gate host
-- local token
-- timezone
-- locale
-- weather coordinates
-- weather API credentials
 - GitHub repositories and token
 - calendar feeds
 - widget update intervals
 - display assignments
 - visual theme settings
 
-A future structure may resemble:
-
-```yaml
-timezone: Europe/Berlin
-locale: de_DE
-
-times_gate:
-  host: 192.168.1.100
-
-widgets:
-  weather_current:
-    display: 1
-    update_interval_minutes: 15
-
-  weather_forecast:
-    display: 2
-    update_interval_minutes: 30
-
-  clock:
-    display: 3
-    update_interval_minutes: 1
-
-  github:
-    display: 4
-    update_interval_minutes: 10
-```
-
-This example is illustrative and does not represent a stable configuration format.
+The existing environment-variable configuration should remain small and understandable. Additional structure should only be introduced when the project genuinely requires it.
 
 ## Contributing
 
@@ -500,6 +733,10 @@ It is not affiliated with, endorsed by, or sponsored by:
 Product names, trademarks, logos, and other third-party assets belong to their respective owners.
 
 Third-party images, fonts, icons, APIs, feeds, and other assets must only be included when their licenses and terms permit redistribution.
+
+## Citation
+
+Citation metadata is provided in [`CITATION.cff`](CITATION.cff).
 
 ## License
 

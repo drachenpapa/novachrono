@@ -1,13 +1,25 @@
 cff-version: 1.2.0
-message: If you use Novachrono in your work, please cite it using the following metadata.
+message: >-
+  If you use Novachrono in your work, please cite it using the following
+  metadata.
+title: Novachrono
 type: software
+version: 0.1.0
+
 authors:
   - family-names: Steinberg
     given-names: Henning
-title: "Novachrono"
+
 url: https://github.com/drachenpapa/novachrono
 repository-code: https://github.com/drachenpapa/novachrono
+
 license: MIT
+
+abstract: >-
+  Novachrono is a self-hosted dashboard renderer for the Divoom Times Gate.
+  It generates a consistent five-screen interface for information such as
+  weather, time, events, and developer workflow metrics.
+
 keywords:
   - Divoom
   - Times Gate
@@ -15,7 +27,3 @@ keywords:
   - Python
   - Raspberry Pi
   - pixel display
-abstract: >
-  Novachrono is a self-hosted dashboard renderer for the Divoom Times Gate.
-  It generates a consistent five-screen interface for information such as
-  weather, time, events, and developer workflow metrics.

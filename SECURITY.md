@@ -1,8 +1,9 @@
 # Security Policy
 
-If you discover a security issue, please *do not* open a public issue.
+If you discover a security issue, please **do not open a public issue**.
 
 Please report it privately via [GitHub Private Vulnerability Reporting](https://github.com/drachenpapa/novachrono/security/advisories/new).
-Make sure to include steps to reproduce and potential impact.
 
-I will review and respond as soon as possible.
+Please include steps to reproduce the issue and its potential impact where possible.
+
+Do not include unrelated credentials, tokens, or other sensitive data in the report.

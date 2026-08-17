@@ -16,8 +16,8 @@ keywords = [
     "times-gate",
 ]
 dependencies = [
-    "babel>=2.18.0",
     "pillow>=12.3.0",
+    "python-dotenv>=1.2.2",
     "typer>=0.27.1",
     "tzdata>=2026.3",
 ]

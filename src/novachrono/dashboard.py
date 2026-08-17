@@ -1,19 +1,29 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageDraw
 
+from novachrono.config import DEFAULT_TIMEZONE_NAME
 from novachrono.design import (
-    ACCENT_COLORS,
+    FRAME_ACCENT_COLOR,
     PANEL_COUNT,
     create_panel,
     draw_placeholder_header,
 )
+from novachrono.i18n import DEFAULT_LOCALE
+from novachrono.pokemon_go import RaidRoster
+from novachrono.units import TemperatureUnit
+from novachrono.weather import CurrentWeather
 from novachrono.widgets.clock import render_clock_panel
+from novachrono.widgets.pokemon_go import render_raid_panel
+from novachrono.widgets.weather import render_weather_panel
 
-DEFAULT_TIMEZONE = ZoneInfo("Europe/Berlin")
+DEFAULT_TIMEZONE = ZoneInfo(DEFAULT_TIMEZONE_NAME)
+
+WEATHER_PANEL_INDEX = 1
 CLOCK_PANEL_INDEX = 2
+POKEMON_GO_PANEL_INDEX = 3
 
 
 def render_panel(index: int) -> Image.Image:
@@ -27,7 +37,7 @@ def render_panel(index: int) -> Image.Image:
 
     draw_placeholder_header(
         draw,
-        accent_color=ACCENT_COLORS[index],
+        accent_color=FRAME_ACCENT_COLOR,
     )
 
     return image
@@ -35,13 +45,31 @@ def render_panel(index: int) -> Image.Image:
 
 def render_dashboard(
     now: datetime | None = None,
+    *,
+    weather: CurrentWeather,
+    raid_roster: RaidRoster,
+    raid_artwork: Mapping[str, Image.Image] | None = None,
+    timezone: ZoneInfo = DEFAULT_TIMEZONE,
+    locale: str = DEFAULT_LOCALE,
+    temperature_unit: TemperatureUnit = TemperatureUnit.CELSIUS,
 ) -> Sequence[Image.Image]:
     """Render all Times Gate panels."""
 
-    current_time = now or datetime.now(DEFAULT_TIMEZONE)
+    current_time = now or datetime.now(timezone)
 
     panels = [render_panel(index) for index in range(PANEL_COUNT)]
 
+    panels[WEATHER_PANEL_INDEX] = render_weather_panel(
+        weather,
+        locale=locale,
+        temperature_unit=temperature_unit,
+    )
+
     panels[CLOCK_PANEL_INDEX] = render_clock_panel(current_time)
+
+    panels[POKEMON_GO_PANEL_INDEX] = render_raid_panel(
+        raid_roster,
+        artwork_by_url=raid_artwork,
+    )
 
     return tuple(panels)

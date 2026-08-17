@@ -1,23 +1,84 @@
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from PIL import Image
 
 from novachrono.dashboard import render_dashboard
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
+from novachrono.pokemon_go import (
+    CombatPowerRange,
+    PokemonType,
+    RaidBoss,
+    RaidRoster,
+    RaidTier,
+)
 from novachrono.preview import create_preview, save_preview
+from novachrono.weather import CurrentWeather
+
+BERLIN = ZoneInfo("Europe/Berlin")
+
+FIXED_TIME = datetime(
+    2026,
+    8,
+    6,
+    12,
+    54,
+    tzinfo=BERLIN,
+)
 
 
-def test_create_preview_combines_all_panels() -> None:
-    preview = create_preview(render_dashboard())
+def _create_test_raid_roster() -> RaidRoster:
+    return RaidRoster(
+        five_star=(
+            RaidBoss(
+                name="Zacian",
+                tier=RaidTier.FIVE_STAR,
+                can_be_shiny=True,
+                types=(
+                    PokemonType.FAIRY,
+                    PokemonType.STEEL,
+                ),
+                normal_combat_power=CombatPowerRange(
+                    minimum=2100,
+                    maximum=2188,
+                ),
+                boosted_combat_power=CombatPowerRange(
+                    minimum=2625,
+                    maximum=2735,
+                ),
+            ),
+        ),
+        mega=(),
+    )
+
+
+@pytest.fixture
+def dashboard(weather: CurrentWeather) -> tuple[Image.Image, ...]:
+    return tuple(
+        render_dashboard(
+            FIXED_TIME,
+            weather=weather,
+            raid_roster=_create_test_raid_roster(),
+        )
+    )
+
+
+def test_create_preview_combines_all_panels(
+    dashboard: tuple[Image.Image, ...],
+) -> None:
+    preview = create_preview(dashboard)
 
     assert preview.mode == "RGB"
     assert preview.width > PANEL_COUNT * PANEL_SIZE
     assert preview.height > PANEL_SIZE
 
 
-def test_create_preview_rejects_wrong_panel_count() -> None:
-    panels = render_dashboard()[:-1]
+def test_create_preview_rejects_wrong_panel_count(
+    dashboard: tuple[Image.Image, ...],
+) -> None:
+    panels = dashboard[:-1]
 
     with pytest.raises(
         ValueError,
@@ -26,8 +87,10 @@ def test_create_preview_rejects_wrong_panel_count() -> None:
         create_preview(panels)
 
 
-def test_create_preview_rejects_wrong_panel_size() -> None:
-    panels = list(render_dashboard())
+def test_create_preview_rejects_wrong_panel_size(
+    dashboard: tuple[Image.Image, ...],
+) -> None:
+    panels = list(dashboard)
     panels[2] = Image.new("RGB", (64, 64))
 
     with pytest.raises(
@@ -38,9 +101,10 @@ def test_create_preview_rejects_wrong_panel_size() -> None:
 
 
 def test_save_preview_creates_parent_directory_and_png(
+    dashboard: tuple[Image.Image, ...],
     tmp_path: Path,
 ) -> None:
-    preview = create_preview(render_dashboard())
+    preview = create_preview(dashboard)
     destination = tmp_path / "nested" / "dashboard-preview.png"
 
     save_preview(preview, destination)

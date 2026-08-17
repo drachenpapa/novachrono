@@ -2,610 +2,367 @@
 
 ## Purpose
 
-This repository is intended to be maintained with the help of AI coding agents such as GitHub Copilot.
+This repository may be maintained with the help of AI coding agents.
 
-Novachrono is a small open-source hobby project that renders a consistent five-screen dashboard for the Divoom Times Gate. It is expected to run locally, initially on a development computer and later on a Raspberry Pi or another always-on device in the same network as the display.
+Novachrono is a small open-source hobby project that renders a five-screen dashboard for the Divoom Times Gate. It is designed to run locally on a development computer and later on a Raspberry Pi or another always-on device.
 
-Agents must prioritize correctness, security, simplicity, readability, maintainability, and testability. The codebase should remain easy to understand for a human maintainer.
+Keep the project small, explicit, understandable, and easy for a human maintainer to review.
 
-Prefer pragmatic solutions over unnecessary abstraction. Do not design for hypothetical enterprise scale.
+## Priorities
 
-## General Principles
+When making changes, prioritize:
 
-Follow these priorities:
+1. correctness
+2. security
+3. simplicity
+4. readability
+5. maintainability
+6. testability
+7. performance where relevant
 
-1. Correctness
-2. Security
-3. Simplicity
-4. Readability
-5. Maintainability
-6. Testability
-7. Performance where relevant
+Prefer pragmatic solutions over speculative architecture.
 
-Guidelines:
+Use:
 
-* Prefer KISS over cleverness.
-* Apply DRY with judgment.
-* Follow SOLID where it improves clarity.
-* Prefer explicit code over implicit magic.
-* Prefer composition over inheritance.
-* Prefer standard library features over new dependencies when practical.
-* Avoid premature optimization.
-* Avoid speculative architecture.
-* Avoid large rewrites unless explicitly requested.
-* Do not introduce abstractions before a concrete need exists.
-* Keep the project appropriate for a small self-hosted application.
+- KISS
+- DRY with judgment
+- YAGNI
+- composition over inheritance
+- standard-library features where practical
+- explicit code over hidden magic
+
+Avoid:
+
+- unnecessary abstraction
+- premature plugin systems
+- enterprise patterns without a concrete need
+- broad rewrites
+- unrelated cleanup
+- new dependencies without clear benefit
 
 ## Project Context
 
-Before making recommendations or changes, inspect:
+Before changing code, inspect the relevant surrounding files.
 
-* `README.md`
-* build and package configuration
-* CI configuration
-* tests
-* relevant source files
-* configuration examples
-* `.github/copilot/architecture.md`, if present
-* `.github/copilot/conventions.md`, if present
+Important project files include:
 
-Do not infer the architecture from a single file. Understand the surrounding context first.
+```text
+README.md
+pyproject.toml
+.env.example
+src/novachrono/
+tests/
+```
 
-Do not assume that planned features described in documentation already exist. Distinguish clearly between:
+Do not infer the architecture from a single module.
 
-* implemented behavior
-* planned behavior
-* assumptions
-* recommendations
+Distinguish clearly between:
 
-## Project-Specific Principles
+- implemented behavior
+- planned behavior
+- assumptions
+- recommendations
 
-Novachrono consists conceptually of four areas:
+## Architecture
 
-1. data sources
-2. normalized application models
-3. widget rendering
-4. output adapters
+Novachrono currently separates these concerns:
 
-Keep these responsibilities separate where doing so improves readability and testability, but do not create unnecessary layers.
+```text
+Configuration
+     |
+     v
+Dashboard / normalized data
+     |
+     v
+Widget renderers
+     |
+     v
+Pillow images
+     |
+     +--> Local preview
+     |
+     +--> Times Gate output adapter
+```
 
-The first implementation target is a static five-panel preview. External data sources and Times Gate communication should be added incrementally.
-
-Important constraints:
-
-* Each Times Gate panel is rendered as a 128 × 128 pixel image.
-* The dashboard contains five independently addressable panels.
-* Rendering must work without access to a physical Times Gate.
-* Every widget should be previewable locally.
-* A combined five-panel preview should be available during development.
-* External APIs, calendar feeds, and device communication may be unavailable.
-* Network failures must not terminate the long-running application.
-* Previously valid data may be cached when appropriate.
-* Time calculations must use timezone-aware datetime values.
-* User-facing times must use the configured local timezone.
-* Secrets and local machine configuration must not be committed.
-* Treat the Times Gate integration as an external adapter whose behavior may change independently of the application.
-* Avoid coupling widget rendering to device communication.
-* Avoid coupling rendering code directly to raw external API responses.
-* Only transmit a new image when the rendered content has changed, where practical.
-
-## Scope
-
-The repository is responsible for:
-
-* retrieving configured dashboard data
-* normalizing external data
-* rendering widget images
-* producing local previews
-* transmitting rendered images to supported displays
-* scheduling widget updates
-* handling temporary external failures
-
-The repository is not responsible for:
-
-* configuring the user's home network
-* providing general NAS or file-server functionality
-* managing unrelated Raspberry Pi services
-* replacing Home Assistant
-* implementing a general-purpose dashboard framework
-* distributing unlicensed third-party assets
-
-Do not broaden the project scope without an explicit request.
-
-## Review Rules
-
-When asked to review code or the entire project:
-
-* Do not modify files unless explicitly asked.
-* Provide a structured review report.
-* Highlight strengths as well as weaknesses.
-* Prioritize findings by impact.
-* Distinguish facts from assumptions.
-* Support recommendations with concrete observations from the codebase.
-* Avoid dogmatic advice.
-* Do not recommend enterprise patterns for this project unless clearly justified.
-* Consider the constraints of a Raspberry Pi or another small always-on device.
-* Consider behavior when external services or the Times Gate are unavailable.
-
-Priority scale:
-
-* P0: Critical correctness, security, or data-loss issue
-* P1: Important maintainability, architecture, or reliability issue
-* P2: Useful improvement with clear benefit
-* P3: Optional or cosmetic improvement
-
-For each relevant finding, include:
-
-* Problem
-* Evidence
-* Impact
-* Recommendation
-* Estimated effort: S / M / L
-
-## Code Change Rules
-
-When asked to modify code:
-
-* Keep changes small and reviewable.
-* Preserve existing behavior unless explicitly asked to change it.
-* Avoid unrelated cleanup.
-* Avoid broad formatting-only changes.
-* Do not introduce new dependencies without a clear reason.
-* Update or add tests when behavior changes.
-* Keep public APIs stable unless a breaking change is explicitly requested.
-* Explain important trade-offs.
-* Update documentation when configuration or user-facing behavior changes.
-* Do not commit generated previews unless the repository conventions explicitly require them.
-* Do not hard-code personal configuration, credentials, IP addresses, account names, or calendar URLs.
-
-Before large changes, propose a short implementation plan.
-
-## Architecture Guidelines
-
-Prefer simple, understandable architecture.
-
-Good architecture means:
-
-* clear responsibilities
-* low coupling
-* high cohesion
-* understandable module boundaries
-* minimal global state
-* predictable data flow
-* testable components
-* no unnecessary layers
-* graceful handling of unavailable external systems
-
-A likely data flow is:
+As external data sources are added, use this conceptual flow:
 
 ```text
 External source
-    |
-    v
+     |
+     v
 Source adapter
-    |
-    v
-Normalized model
-    |
-    v
+     |
+     v
+Normalized application model
+     |
+     v
 Widget renderer
-    |
-    v
-Rendered image
-    |
-    +--> Local preview
-    |
-    +--> Times Gate output adapter
 ```
 
-This is a conceptual guide, not a requirement to create one class or interface for every box.
+This is a guideline, not a requirement to create an interface or class for every layer.
 
-Avoid:
+### Responsibilities
 
-* god classes
-* circular dependencies
-* over-engineered abstractions
-* premature plugin systems
-* unnecessary inheritance hierarchies
-* hidden side effects
-* framework lock-in where avoidable
-* direct network requests inside low-level drawing functions
-* rendering code that depends on a physical device
-* a single global scheduler containing unrelated business logic
-* generic frameworks designed for hypothetical future widgets
+`config.py`
+- loads and validates application configuration
+- centralizes environment-variable access
 
-Add abstractions only when at least one concrete use case benefits from them.
+`dashboard.py`
+- composes the five dashboard panels
+- assigns widgets to panel positions
 
-## Data Source Guidelines
+`design/`
+- contains shared visual constants and reusable drawing primitives
 
-External data sources may include HTTP APIs, calendar feeds, or local system information.
+`widgets/`
+- renders deterministic 128 × 128 Pillow images
+- must not perform network requests
+- must not communicate with the Times Gate
 
-Data source code should:
+`outputs/`
+- contains external output adapters
+- currently contains the Times Gate adapter
 
-* use explicit timeouts
-* handle temporary network failures
-* validate important response fields
-* avoid logging secrets
-* convert raw responses into internal models
-* use timezone-aware datetime values
-* provide clear error information
-* be testable without performing real network requests
-* respect service terms and reasonable request intervals
+`preview.py`
+- combines individual panels into a local preview image
 
-Do not scrape websites when a documented API or feed is available and appropriate.
+`units.py`
+- contains temperature-unit definitions and conversion
 
-Do not assume external data is complete, correctly formatted, or always available.
+`i18n.py`
+- contains the project's small UI translation table
 
-Where useful, distinguish between:
+## Current Dashboard
 
-* no data exists
-* data is temporarily unavailable
-* data is invalid
-* authentication failed
-* the configured source is disabled
+The dashboard contains five independently addressable 128 × 128 panels.
 
-## Rendering Guidelines
+Current assignment:
 
-Rendering is a core responsibility of Novachrono.
+```text
+0 -> placeholder
+1 -> current weather
+2 -> clock and date
+3 -> pokémon go
+4 -> placeholder
+```
+
+The weather widget uses live data from Open-Meteo.
+
+The Pokémon GO panel uses live raid data from ScrapedDuck and artwork from the PokéAPI.
+
+## Rendering
+
+Rendering is a core part of Novachrono.
 
 Widget renderers should:
 
-* produce deterministic output for deterministic input
-* render at exactly 128 × 128 pixels unless explicitly working on a combined preview
-* remain independent of device communication
-* avoid performing network requests
-* handle missing optional data gracefully
-* maintain readable contrast
-* avoid text that is too small for the physical display
-* use shared design tokens for colors, spacing, and typography
-* avoid unnecessary visual inconsistency between widgets
-* support local preview generation
+- produce deterministic output for deterministic input
+- return exactly 128 × 128 pixel images
+- use RGB mode
+- remain independent of network and device communication
+- use the shared Novachrono design where appropriate
+- prioritize readability on the physical display
+- avoid very small text where possible
+- handle variable-width values intentionally
 
-Prefer a small shared design system over duplicated literal values.
+The physical Times Gate display can make small bright pixels bloom. A layout that looks good in a PNG preview may still require adjustment on the real device.
 
-Examples of shared design values include:
+Do not over-generalize layouts. Widget-specific geometry may remain inside the widget.
 
-* canvas dimensions
-* outer margins
-* border radius
-* header position
-* title font
-* primary value font
-* footer font
-* default background
-* default foreground
-* accent colors
-* icon sizing
+## Weather
 
-Do not over-generalize layouts. Widgets may use different compositions when their content requires it.
+Weather values are stored internally in Celsius.
 
-When rendering variable-length text:
+The renderer may display:
 
-* define maximum widths
-* wrap or truncate intentionally
-* avoid silent overflow
-* provide sensible fallback text
-* test unusually long names and values
+```text
+C
+F
+```
 
-## Time and Scheduling Guidelines
+Conversion belongs at the presentation boundary.
 
-Time is central to this project.
+Layouts must remain usable for:
 
-Always:
+- negative temperatures
+- three-digit Fahrenheit temperatures
+- precipitation values up to 100%
 
-* use timezone-aware datetime values
-* avoid mixing naive and aware datetime objects
-* store or process timestamps consistently
-* convert to the configured timezone at presentation boundaries
-* account for daylight-saving transitions
-* make time-dependent logic testable using an injected or explicit current time
-* avoid calling the system clock throughout business logic
+Do not reintroduce forecast fields unless an implemented feature actually needs them.
 
-Do not implement minute updates using an uncorrected repeating 60-second sleep when alignment to the minute matters.
+## Internationalization
 
-Prefer scheduling that aligns clock updates to the beginning of the next minute.
+The current supported locales are:
 
-Different widgets may use different update intervals.
+```text
+de_DE
+en_US
+```
 
-Examples:
+Keep the translation system simple unless requirements justify a more advanced localization library.
 
-* clock: every minute
-* weather: every 15 to 30 minutes
-* calendar or event feed: every 15 minutes or longer
-* GitHub metrics: every few minutes
-* static information: only when configuration changes
+Do not add a dependency solely to translate a small number of static strings.
 
-Avoid transmitting unchanged images where practical.
+## Time
 
-## Times Gate Integration Guidelines
+Use timezone-aware `datetime` values.
 
-The Times Gate is an external device and must be isolated behind an output adapter.
+User-facing times must respect the configured timezone.
 
-Device integration should:
+Do not mix naive and timezone-aware datetime objects.
 
-* use explicit connection and response timeouts
-* handle the device being offline
-* avoid terminating the application after a temporary failure
-* support updating individual displays
-* validate image dimensions and format before transmission
-* avoid exposing device tokens in logs
-* provide actionable error messages
-* permit local rendering without device configuration
-* avoid assuming undocumented behavior is permanently stable
+Time-dependent behavior should be testable using explicit or injected timestamps.
 
-The Times Gate integration may rely on unofficial or reverse-engineered behavior. Keep implementation details isolated so they can be updated without changing widget rendering or data source logic.
+## External Data Sources
 
-Do not send all five images when only one display has changed unless the device protocol requires it.
+External data sources must remain separate from widget rendering.
 
-## Configuration Guidelines
+Data-source code should:
 
-Configuration should be explicit and documented.
+- use explicit timeouts
+- validate important response data
+- provide actionable errors
+- avoid logging secrets
+- be testable without real network access
+- convert provider-specific responses into internal application models
 
-Use environment variables or configuration files as appropriate, but avoid unnecessary complexity.
+Prefer documented APIs or feeds over scraping where practical.
 
-Configuration may eventually include:
+Do not couple renderer code directly to raw provider responses.
 
-* local timezone
-* Times Gate host
-* Times Gate token
-* weather location
-* weather API key
-* GitHub account
-* GitHub token
-* calendar feed URL
-* widget-to-display assignments
-* update intervals
-* theme settings
+## Times Gate
 
-Rules:
+Treat the Times Gate as an external adapter.
 
-* provide safe defaults where reasonable
-* fail clearly for missing required configuration
-* do not commit real secrets
-* provide an example configuration
-* separate secrets from non-sensitive settings where practical
-* validate values near application startup
-* do not scatter environment-variable access throughout the codebase
-* avoid hard-coded local paths and addresses
+The adapter should:
 
-## Error Handling and Reliability
+- use explicit timeouts
+- validate panel indices
+- validate image dimensions
+- provide useful errors
+- avoid exposing device tokens
+- remain independent of widget rendering
 
-Novachrono is expected to run unattended.
+Do not move device communication into widgets or dashboard drawing code.
 
-Temporary failures should be handled gracefully.
+Future long-running operation should tolerate temporary device outages and recover automatically.
 
-The application should:
+## Configuration
 
-* continue running when one data source fails
-* avoid replacing valid information with an empty screen after a temporary failure
-* preserve the last valid result where appropriate
-* log failures with enough context to diagnose them
-* avoid excessively repeating identical error messages
-* recover automatically when an external service becomes available again
-* isolate failures so that one widget does not prevent other widgets from updating
+Configuration is loaded centrally.
 
-Do not catch exceptions without either handling or logging them meaningfully.
+Do not scatter `os.environ` access throughout the project.
 
-Do not expose tokens, private URLs, or personal data in errors or logs.
+Current configuration includes:
 
-## Testing Guidelines
+```text
+NOVACHRONO_LOCALE
+NOVACHRONO_TIMEZONE
+NOVACHRONO_TEMPERATURE_UNIT
+NOVACHRONO_TIMES_GATE_HOST
+NOVACHRONO_TIMES_GATE_TOKEN
+```
 
-Tests should focus on behavior and important edge cases.
+Process environment variables override `.env`.
 
-Prefer:
+Never commit:
 
-* fast automated tests
-* clear test names
-* deterministic tests
-* meaningful assertions
-* tests close to the behavior being verified
-* fixed timestamps for time-dependent behavior
-* representative rendering inputs
-* mocked or fake external adapters at network boundaries
-* tests for unavailable and malformed external data
+- real Times Gate tokens
+- API keys
+- private feed URLs
+- personal credentials
+- `.env`
 
-Avoid:
+Update `.env.example` whenever public configuration changes.
 
-* brittle tests
-* excessive mocking
-* testing implementation details without benefit
-* real external network calls in the default test suite
-* dependence on a physical Times Gate
-* dependence on the current date or local machine timezone
-* slow tests in the default CI path unless necessary
-
-Rendering tests should prefer deterministic inputs and fixed timestamps.
-
-Use visual regression or golden-image tests only when they provide clear value. Do not rely exclusively on large binary image snapshots when smaller behavioral assertions are sufficient.
-
-High-value rendering tests may verify:
-
-* image dimensions
-* image mode
-* no text overflow for known edge cases
-* correct state selection
-* correct formatting of values
-* fallback behavior for missing data
-* stable output for fixed input
-
-If test coverage is weak, recommend high-value tests first.
-
-## Security Guidelines
-
-Check for:
-
-* unsafe input handling
-* insecure defaults
-* secrets in source code
-* weak authentication or authorization patterns
-* unsafe deserialization
-* command injection risks
-* path traversal risks
-* dependency risks
-* insufficient error handling around external systems
-* untrusted remote image or calendar content
-* sensitive information in logs
-
-For this project, pay particular attention to:
-
-* GitHub personal access tokens
-* weather API keys
-* Times Gate device tokens
-* calendar feed URLs containing private identifiers
-* local configuration files
-* downloaded remote assets
-* cached API responses
-* logs containing event, account, or device information
-
-Never print, generate, commit, or expose secrets.
-
-Do not weaken security controls for convenience.
-
-Do not download and execute remote content.
-
-Validate file paths and remote content before processing them.
-
-## Dependency Guidelines
+## Dependencies
 
 Keep dependencies intentional.
 
-Before suggesting a new dependency, consider:
+Before adding one, ask:
 
-* Is the standard library sufficient?
-* Is the dependency actively maintained?
-* Is it necessary for the project size?
-* Does it increase security or supply-chain risk?
-* Is the benefit worth the added complexity?
-* Does it work reliably on the intended Raspberry Pi environment?
-* Is its license compatible with the project?
+- Is the standard library sufficient?
+- Is the dependency necessary?
+- Is it maintained?
+- Does it work on the intended Raspberry Pi environment?
+- Is the additional supply-chain risk justified?
 
-Prefer small, well-maintained, widely used dependencies.
+Do not add frameworks to replace small amounts of straightforward Python.
 
-Do not add a framework merely to avoid writing a small amount of straightforward code.
+## Tests
 
-Pin and update dependencies according to the repository conventions.
+Behavior changes should normally include tests.
 
-GitHub Actions should be pinned to full commit SHAs rather than mutable tags.
+Tests should be:
 
-## Asset and Licensing Guidelines
+- fast
+- deterministic
+- readable
+- independent of real external services
+- independent of a physical Times Gate
+- independent of the current local timezone or date
 
-Do not assume that images, fonts, logos, sprites, or icons found online may be redistributed.
+Prefer behavioral rendering tests over large golden-image snapshots.
 
-Before adding an asset, verify:
+Small targeted pixel assertions are acceptable when protecting a specific visual invariant or regression.
 
-* its source
-* its license
-* whether redistribution is permitted
-* whether attribution is required
-* whether modification is permitted
-* whether the license is compatible with the repository
+Current local checks are:
 
-Do not commit:
+```shell
+uv run ruff format --check .
+uv run ruff check .
+uv run bandit -r src
+uv run pip-audit
+uv run pytest
+uv run novachrono preview
+```
 
-* official Pokémon artwork without permission
-* community artwork without a compatible license
-* proprietary fonts
-* assets extracted from the Divoom application
-* trademarks used in a way that implies endorsement
+## Code Changes
+
+When modifying code:
+
+- keep changes focused
+- preserve existing behavior unless intentionally changing it
+- avoid unrelated formatting changes
+- update tests when behavior changes
+- update documentation when configuration or user-facing behavior changes
+- avoid hard-coded personal paths, IP addresses, and credentials
+- keep public APIs stable unless a breaking change is justified
+
+For large changes, propose a short implementation plan first.
+
+## Reviews
+
+When reviewing the repository:
+
+- do not modify files unless asked
+- prioritize findings by impact
+- distinguish facts from assumptions
+- give concrete evidence
+- avoid dogmatic recommendations
+- consider the constraints of a Raspberry Pi and a small hobby project
+
+Suggested priorities:
+
+```text
+P0 - critical correctness or security issue
+P1 - important reliability or maintainability issue
+P2 - useful improvement with clear benefit
+P3 - optional or cosmetic improvement
+```
+
+## Assets and Licensing
+
+Do not assume that artwork, fonts, icons, sprites, or logos found online may be redistributed.
 
 Prefer:
 
-* original assets
-* openly licensed assets
-* simple programmatically drawn icons
-* assets with documented attribution
+- original assets
+- programmatically drawn assets
+- openly licensed assets with documented attribution
 
-Record required attribution in an appropriate file.
+Do not commit proprietary or unlicensed third-party assets.
 
-## Documentation Guidelines
+## Guiding Principle
 
-Documentation should explain intent, constraints, and non-obvious decisions.
-
-Prefer:
-
-* concise README updates
-* architecture notes for important decisions
-* comments for non-obvious code
-* examples for public APIs or configuration
-* clear distinction between implemented and planned behavior
-* setup instructions that work from a clean environment
-
-Avoid comments that merely repeat the code.
-
-Do not document commands or features that have not been verified.
-
-Update documentation when:
-
-* configuration changes
-* setup steps change
-* new external services are introduced
-* user-visible behavior changes
-* architecture decisions affect contributors
-
-## Language-Specific Guidance
-
-Follow established Python best practices once the Python toolchain has been selected.
-
-Consider Python-specific conventions for:
-
-* source layout
-* naming
-* type annotations
-* error handling
-* dependency management
-* formatting
-* linting
-* testing
-* packaging
-* logging
-
-Do not add language-specific tools until the project has chosen them.
-
-Once selected, use the configured project tools rather than introducing competing alternatives.
-
-Avoid mutable default arguments.
-
-Prefer explicit return types for public and non-trivial functions.
-
-Use dataclasses or similarly simple models where they improve clarity. Do not introduce a validation framework unless runtime validation needs justify it.
-
-## Output Style
-
-When reporting findings:
-
-* Be concise but specific.
-* Use clear headings.
-* Prefer actionable recommendations.
-* Separate critical issues from nice-to-have improvements.
-* Mention uncertainty explicitly.
-* Do not exaggerate minor issues.
-* State when a recommendation depends on an unresolved project decision.
-
-For project reviews, use this structure:
-
-1. Executive Summary
-2. Strengths
-3. Main Risks
-4. Architecture Review
-5. Code Quality Review
-6. Testability Review
-7. Security and Dependency Review
-8. Prioritized Findings
-9. Recommended Next Steps
-10. Things Not Worth Changing
-
-## Non-Goals
-
-Do not optimize for:
-
-* academic purity
-* unnecessary abstraction
-* framework maximalism
-* premature scalability
-* style-only debates
-* large rewrites without strong justification
-* hypothetical plugin ecosystems
-* enterprise deployment patterns
-* maximum configurability before basic functionality exists
-
-The best solution is usually the simplest solution that is correct, secure, readable, reliable, and easy to maintain.
+The best solution for Novachrono is usually the simplest solution that is correct, secure, readable, testable, and easy to maintain.

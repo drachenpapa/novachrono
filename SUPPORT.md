@@ -1,19 +1,20 @@
 # Support & Help
 
-> :information_source: This project has a [Code of Conduct](CODE_OF_CONDUCT.md). Please keep all interactions respectful and constructive.
+Please keep all interactions respectful and constructive. See the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Support, Bugs & Feature Requests
 
-Use the [GitHub issue tracker](https://github.com/drachenpapa/novachrono/issues/) for bugs, feature requests, and general questions.
-Before opening a new issue, quickly check existing issues to see whether it has already been covered.
+Use the [GitHub issue tracker](https://github.com/drachenpapa/novachrono/issues) for bugs, feature requests, setup questions, and general project questions.
 
-When reporting a bug, include what you expected, what happened, steps to reproduce, and any relevant logs or screenshots. Good context saves everyone time.
+Before opening a new issue, please check whether the topic has already been covered.
 
-This is a hobby/open-source project. Response times are not guaranteed.
+When reporting a bug, include what you expected, what happened, steps to reproduce, and relevant logs or screenshots where useful.
+
+Novachrono is a hobby/open-source project. Response times are not guaranteed.
 
 ## Security Issues
 
-If you have found a potential security issue, please follow the private reporting instructions described in our [Security Policy](SECURITY.md).
+For potential security issues, please follow the private reporting instructions in the [Security Policy](SECURITY.md).
 
 ## Contributing
 

@@ -1,0 +1,291 @@
+from pathlib import Path
+
+import pytest
+
+from novachrono.config import ConfigError, load_config
+from novachrono.units import TemperatureUnit
+
+CONFIG_ENVIRONMENT_VARIABLES = (
+    "NOVACHRONO_TIMEZONE",
+    "NOVACHRONO_LOCALE",
+    "NOVACHRONO_TEMPERATURE_UNIT",
+    "NOVACHRONO_WEATHER_LATITUDE",
+    "NOVACHRONO_WEATHER_LONGITUDE",
+    "NOVACHRONO_TIMES_GATE_HOST",
+    "NOVACHRONO_TIMES_GATE_TOKEN",
+)
+
+
+@pytest.fixture(autouse=True)
+def clear_config_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for variable in CONFIG_ENVIRONMENT_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+
+
+def test_load_config_uses_defaults(tmp_path: Path) -> None:
+    config = load_config(tmp_path / ".env")
+
+    assert config.timezone.key == "Europe/Berlin"
+    assert config.locale == "de_DE"
+    assert config.temperature_unit is TemperatureUnit.CELSIUS
+
+    assert config.weather.latitude is None
+    assert config.weather.longitude is None
+
+    assert config.times_gate.host is None
+    assert config.times_gate.local_token is None
+
+
+def test_load_config_reads_dotenv(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TIMEZONE=Europe/Berlin",
+        "NOVACHRONO_LOCALE=en_US",
+        "NOVACHRONO_TEMPERATURE_UNIT=F",
+        "NOVACHRONO_WEATHER_LATITUDE=53.04771",
+        "NOVACHRONO_WEATHER_LONGITUDE=8.80169",
+        "NOVACHRONO_TIMES_GATE_HOST=192.168.178.50",
+        "NOVACHRONO_TIMES_GATE_TOKEN=secret",
+    )
+
+    config = load_config(env_file)
+
+    assert config.timezone.key == "Europe/Berlin"
+    assert config.locale == "en_US"
+    assert config.temperature_unit is TemperatureUnit.FAHRENHEIT
+
+    assert config.weather.latitude == pytest.approx(53.04771)
+    assert config.weather.longitude == pytest.approx(8.80169)
+
+    assert config.times_gate.host == "192.168.178.50"
+    assert config.times_gate.local_token == "secret"
+
+
+def test_environment_overrides_dotenv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_LOCALE=de_DE",
+        "NOVACHRONO_TEMPERATURE_UNIT=C",
+        "NOVACHRONO_WEATHER_LATITUDE=1",
+        "NOVACHRONO_WEATHER_LONGITUDE=2",
+        "NOVACHRONO_TIMES_GATE_HOST=192.168.1.100",
+        "NOVACHRONO_TIMES_GATE_TOKEN=file-token",
+    )
+
+    monkeypatch.setenv("NOVACHRONO_LOCALE", "en_US")
+    monkeypatch.setenv("NOVACHRONO_TEMPERATURE_UNIT", "F")
+    monkeypatch.setenv("NOVACHRONO_WEATHER_LATITUDE", "53.04771")
+    monkeypatch.setenv("NOVACHRONO_WEATHER_LONGITUDE", "8.80169")
+    monkeypatch.setenv("NOVACHRONO_TIMES_GATE_HOST", "192.168.178.50")
+    monkeypatch.setenv("NOVACHRONO_TIMES_GATE_TOKEN", "environment-token")
+
+    config = load_config(env_file)
+
+    assert config.locale == "en_US"
+    assert config.temperature_unit is TemperatureUnit.FAHRENHEIT
+
+    assert config.weather.latitude == pytest.approx(53.04771)
+    assert config.weather.longitude == pytest.approx(8.80169)
+
+    assert config.times_gate.host == "192.168.178.50"
+    assert config.times_gate.local_token == "environment-token"
+
+
+def test_blank_weather_values_become_none(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_WEATHER_LATITUDE=",
+        "NOVACHRONO_WEATHER_LONGITUDE=",
+    )
+
+    config = load_config(env_file)
+
+    assert config.weather.latitude is None
+    assert config.weather.longitude is None
+
+
+@pytest.mark.parametrize(
+    "configured_variable",
+    [
+        "NOVACHRONO_WEATHER_LATITUDE=53.04771",
+        "NOVACHRONO_WEATHER_LONGITUDE=8.80169",
+    ],
+)
+def test_weather_coordinates_must_be_configured_together(
+    configured_variable: str,
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+    _write_env(env_file, configured_variable)
+
+    with pytest.raises(
+        ConfigError,
+        match="latitude and longitude must be configured together",
+    ):
+        load_config(env_file)
+
+
+@pytest.mark.parametrize(
+    ("variable", "value", "message"),
+    [
+        ("NOVACHRONO_WEATHER_LATITUDE", "91", "latitude must be between"),
+        ("NOVACHRONO_WEATHER_LATITUDE", "-91", "latitude must be between"),
+        ("NOVACHRONO_WEATHER_LONGITUDE", "181", "longitude must be between"),
+        ("NOVACHRONO_WEATHER_LONGITUDE", "-181", "longitude must be between"),
+    ],
+)
+def test_weather_coordinates_reject_out_of_range_values(
+    variable: str,
+    value: str,
+    message: str,
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    values = {
+        "NOVACHRONO_WEATHER_LATITUDE": "53.04771",
+        "NOVACHRONO_WEATHER_LONGITUDE": "8.80169",
+    }
+    values[variable] = value
+
+    _write_env(
+        env_file,
+        *(f"{name}={configured_value}" for name, configured_value in values.items()),
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=message,
+    ):
+        load_config(env_file)
+
+
+def test_invalid_weather_coordinate_raises_config_error(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_WEATHER_LATITUDE=not-a-number",
+        "NOVACHRONO_WEATHER_LONGITUDE=8.80169",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Invalid numeric value",
+    ):
+        load_config(env_file)
+
+
+def test_blank_times_gate_values_become_none(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TIMES_GATE_HOST=",
+        "NOVACHRONO_TIMES_GATE_TOKEN=",
+    )
+
+    config = load_config(env_file)
+
+    assert config.times_gate.host is None
+    assert config.times_gate.local_token is None
+
+
+def test_invalid_timezone_raises_config_error(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TIMEZONE=Definitely/Not-A-Timezone",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Unknown timezone",
+    ):
+        load_config(env_file)
+
+
+def test_invalid_locale_raises_config_error(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_LOCALE=xx_XX",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Unsupported locale",
+    ):
+        load_config(env_file)
+
+
+@pytest.mark.parametrize(
+    ("configured_value", "expected_unit"),
+    [
+        ("C", TemperatureUnit.CELSIUS),
+        ("c", TemperatureUnit.CELSIUS),
+        ("CELSIUS", TemperatureUnit.CELSIUS),
+        ("celsius", TemperatureUnit.CELSIUS),
+        ("F", TemperatureUnit.FAHRENHEIT),
+        ("f", TemperatureUnit.FAHRENHEIT),
+        ("FAHRENHEIT", TemperatureUnit.FAHRENHEIT),
+        ("fahrenheit", TemperatureUnit.FAHRENHEIT),
+    ],
+)
+def test_temperature_unit_accepts_supported_values(
+    configured_value: str,
+    expected_unit: TemperatureUnit,
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        f"NOVACHRONO_TEMPERATURE_UNIT={configured_value}",
+    )
+
+    config = load_config(env_file)
+
+    assert config.temperature_unit is expected_unit
+
+
+def test_invalid_temperature_unit_raises_config_error(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TEMPERATURE_UNIT=K",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Unsupported temperature unit",
+    ):
+        load_config(env_file)
+
+
+def _write_env(
+    destination: Path,
+    *lines: str,
+) -> None:
+    destination.write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+    )

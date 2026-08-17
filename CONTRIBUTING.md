@@ -50,3 +50,20 @@ Please keep the following in mind:
 - make sure the project still builds/tests successfully
 
 Draft PRs are welcome.
+
+---
+
+### Local Checks
+
+Before submitting a pull request, please run:
+
+```shell
+uv run ruff format --check .
+uv run ruff check .
+uv run bandit -r src
+uv run pip-audit
+uv run pytest
+uv run novachrono preview
+```
+
+Tests should not require a physical Times Gate or real credentials.
