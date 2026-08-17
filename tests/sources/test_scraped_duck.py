@@ -1,6 +1,6 @@
 import json
 from unittest.mock import MagicMock, patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -306,3 +306,55 @@ def test_fetch_raid_roster_rejects_invalid_timeout() -> None:
         fetch_raid_roster(
             timeout_seconds=0,
         )
+
+
+@patch("novachrono.sources.scraped_duck.urlopen")
+def test_fetch_raid_roster_reports_http_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.side_effect = HTTPError(
+        url="https://example.com",
+        code=503,
+        msg="Service Unavailable",
+        hdrs=None,  # type: ignore[arg-type]
+        fp=None,
+    )
+
+    with pytest.raises(
+        ScrapedDuckError,
+        match="ScrapedDuck returned HTTP 503",
+    ):
+        fetch_raid_roster()
+
+
+@patch("novachrono.sources.scraped_duck.urlopen")
+def test_fetch_raid_roster_reports_timeout(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.side_effect = TimeoutError()
+
+    with pytest.raises(
+        ScrapedDuckError,
+        match="timed out",
+    ):
+        fetch_raid_roster()
+
+
+@patch("novachrono.sources.scraped_duck.urlopen")
+def test_fetch_raid_roster_rejects_non_list_response(
+    mocked_urlopen: MagicMock,
+) -> None:
+    response = MagicMock()
+    response.read.return_value = json.dumps({"unexpected": "object"}).encode("utf-8")
+
+    context_manager = MagicMock()
+    context_manager.__enter__.return_value = response
+    context_manager.__exit__.return_value = False
+
+    mocked_urlopen.return_value = context_manager
+
+    with pytest.raises(
+        ScrapedDuckError,
+        match="unexpected response",
+    ):
+        fetch_raid_roster()

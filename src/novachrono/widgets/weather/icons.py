@@ -1,313 +1,245 @@
-from collections.abc import Callable
-from dataclasses import replace
+import math
+from typing import Final
 
-from PIL import Image, ImageDraw
+from PIL import ImageDraw
 
-from novachrono.config import ConfigError, load_config
 from novachrono.design import (
     FRAME_BRIGHT_COLOR,
     PANEL_COLOR,
     WEATHER_CLOUD_COLOR,
     WEATHER_CLOUD_SHADOW_COLOR,
+    WEATHER_RAIN_COLOR,
     WEATHER_SUN_COLOR,
     WEATHER_SUN_RAY_COLOR,
 )
-from novachrono.outputs.times_gate import (
-    TimesGateClient,
-    TimesGateConfig,
-    TimesGateError,
-)
-from novachrono.units import TemperatureUnit
-from novachrono.weather import CurrentWeather, WeatherCondition
-from novachrono.widgets.weather import (
-    render_weather_animation,
-    render_weather_panel,
-)
+from novachrono.weather import WeatherCondition
 
-WEATHER_ICON_ORIGIN = (16, 34)
-WEATHER_ICON_SIZE = 32
-
-THUNDERSTORM_FRAME_DURATION_MS = 250
-RAIN_FRAME_DURATION_MS = 350
-FOG_FRAME_DURATION_MS = 500
-
-THUNDERSTORM_FRAME_COUNT = 12
-
-ThunderstormDrawer = Callable[
-    [ImageDraw.ImageDraw, tuple[int, int], int, int],
-    None,
-]
+_MOON_COLOR: Final = "#C8E6F0"
+_FOG_COLOR: Final = WEATHER_CLOUD_SHADOW_COLOR
 
 
-def main() -> None:
-    try:
-        app_config = load_config()
-    except ConfigError as error:
-        raise SystemExit(f"Configuration error: {error}") from error
+def draw_weather_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    condition: WeatherCondition,
+    is_day: bool,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    """Draw a static weather icon for the given condition."""
+    _draw_icon(
+        draw,
+        condition=condition,
+        is_day=is_day,
+        origin=origin,
+        size=size,
+        frame_index=0,
+    )
 
-    host = app_config.times_gate.host
-    local_token = app_config.times_gate.local_token
 
-    if host is None:
-        raise SystemExit("Missing NOVACHRONO_TIMES_GATE_HOST.")
+def draw_weather_icon_frame(
+    draw: ImageDraw.ImageDraw,
+    *,
+    condition: WeatherCondition,
+    is_day: bool,
+    origin: tuple[int, int],
+    size: int,
+    frame_index: int,
+) -> None:
+    """Draw one animation frame of a weather icon."""
+    _draw_icon(
+        draw,
+        condition=condition,
+        is_day=is_day,
+        origin=origin,
+        size=size,
+        frame_index=frame_index,
+    )
 
-    if local_token is None:
-        raise SystemExit("Missing NOVACHRONO_TIMES_GATE_TOKEN.")
 
-    try:
-        client = TimesGateClient(
-            TimesGateConfig(
-                host=host,
-                local_token=local_token,
+def draw_raindrop(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    """Draw a small teardrop-shaped raindrop."""
+    x, y = origin
+    half = max(1, size // 2)
+
+    # Pointed top triangle
+    draw.polygon(
+        (
+            (x + half, y),
+            (x, y + half),
+            (x + size, y + half),
+        ),
+        fill=WEATHER_RAIN_COLOR,
+    )
+
+    # Round bottom ellipse
+    draw.ellipse(
+        (x, y + half - 1, x + size, y + size),
+        fill=WEATHER_RAIN_COLOR,
+    )
+
+
+def _draw_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    condition: WeatherCondition,
+    is_day: bool,
+    origin: tuple[int, int],
+    size: int,
+    frame_index: int,
+) -> None:
+    match condition:
+        case WeatherCondition.CLEAR:
+            if is_day:
+                _draw_sun(draw, origin=origin, size=size)
+            else:
+                _draw_moon(draw, origin=origin, size=size)
+
+        case WeatherCondition.PARTLY_CLOUDY:
+            if is_day:
+                _draw_small_sun(draw, origin=origin, size=size)
+            else:
+                _draw_small_moon(draw, origin=origin, size=size)
+            _draw_cloud(draw, origin=origin, size=size, bright=True)
+
+        case WeatherCondition.CLOUDY:
+            _draw_cloud(draw, origin=origin, size=size, bright=True)
+
+        case WeatherCondition.RAIN:
+            _draw_cloud(draw, origin=origin, size=size, bright=False)
+            _draw_rain(draw, origin=origin, size=size, frame_index=frame_index)
+
+        case WeatherCondition.FOG:
+            _draw_fog(draw, origin=origin, size=size, frame_index=frame_index)
+
+        case WeatherCondition.SNOW:
+            _draw_cloud(draw, origin=origin, size=size, bright=False)
+            _draw_snow(draw, origin=origin, size=size)
+
+        case WeatherCondition.THUNDERSTORM:
+            _draw_cloud(draw, origin=origin, size=size, bright=True)
+            _draw_bolt(
+                draw,
+                origin=origin,
+                size=size,
+                fill=WEATHER_SUN_COLOR,
+                outline=WEATHER_SUN_RAY_COLOR,
             )
-        )
-    except ValueError as error:
-        raise SystemExit(f"Invalid Times Gate configuration: {error}") from error
-
-    thunderstorm = _create_weather(WeatherCondition.THUNDERSTORM)
-    rain = _create_weather(WeatherCondition.RAIN)
-    fog = _create_weather(WeatherCondition.FOG)
-
-    pulse_frames = _render_thunderstorm_animation(
-        thunderstorm,
-        drawer=_draw_pulsing_bolt,
-        locale=app_config.locale,
-        temperature_unit=app_config.temperature_unit,
-    )
-
-    cloud_flash_frames = _render_thunderstorm_animation(
-        thunderstorm,
-        drawer=_draw_cloud_flash,
-        locale=app_config.locale,
-        temperature_unit=app_config.temperature_unit,
-    )
-
-    static_panel = _render_static_cloud_and_bolt(
-        thunderstorm,
-        locale=app_config.locale,
-        temperature_unit=app_config.temperature_unit,
-    )
-
-    rain_frames = render_weather_animation(
-        rain,
-        locale=app_config.locale,
-        temperature_unit=app_config.temperature_unit,
-    )
-
-    fog_frames = render_weather_animation(
-        fog,
-        locale=app_config.locale,
-        temperature_unit=app_config.temperature_unit,
-    )
-
-    try:
-        client.send_animation(
-            panel_index=0,
-            images=pulse_frames,
-            frame_duration_ms=THUNDERSTORM_FRAME_DURATION_MS,
-        )
-
-        client.send_animation(
-            panel_index=1,
-            images=cloud_flash_frames,
-            frame_duration_ms=THUNDERSTORM_FRAME_DURATION_MS,
-        )
-
-        client.send_image(
-            panel_index=2,
-            image=static_panel,
-        )
-
-        client.send_animation(
-            panel_index=3,
-            images=rain_frames,
-            frame_duration_ms=RAIN_FRAME_DURATION_MS,
-        )
-
-        client.send_animation(
-            panel_index=4,
-            images=fog_frames,
-            frame_duration_ms=FOG_FRAME_DURATION_MS,
-        )
-    except TimesGateError as error:
-        raise SystemExit(f"Times Gate error: {error}") from error
-
-    print()
-    print("Thunderstorm experiment sent.")
-    print()
-    print("Display 1: CLOUD + PULSING BOLT")
-    print("Display 2: CLOUD FLASH + BOLT")
-    print("Display 3: STATIC CLOUD + BOLT")
-    print("Display 4: RAIN - frozen reference")
-    print("Display 5: FOG - frozen rolling reference")
-    print()
-    print("Run 'uv run novachrono send-dashboard' to restore the normal dashboard.")
 
 
-def _render_thunderstorm_animation(
-    weather: CurrentWeather,
+def _draw_sun(
+    draw: ImageDraw.ImageDraw,
     *,
-    drawer: ThunderstormDrawer,
-    locale: str,
-    temperature_unit: TemperatureUnit,
-) -> tuple[Image.Image, ...]:
-    base_panel = render_weather_panel(
-        weather,
-        locale=locale,
-        temperature_unit=temperature_unit,
-    )
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    cx = origin[0] + size // 2
+    cy = origin[1] + size // 2
+    radius = _scale(size, 6)
+    ray_inner = _scale(size, 9)
+    ray_outer = _scale(size, 13)
+    ray_width = max(1, _scale(size, 2))
 
-    return tuple(
-        _render_thunderstorm_frame(
-            base_panel,
-            drawer=drawer,
-            frame_index=frame_index,
-        )
-        for frame_index in range(THUNDERSTORM_FRAME_COUNT)
-    )
-
-
-def _render_thunderstorm_frame(
-    base_panel: Image.Image,
-    *,
-    drawer: ThunderstormDrawer,
-    frame_index: int,
-) -> Image.Image:
-    image = base_panel.copy()
-    draw = ImageDraw.Draw(image)
-
-    _clear_weather_icon(draw)
-
-    drawer(
-        draw,
-        WEATHER_ICON_ORIGIN,
-        WEATHER_ICON_SIZE,
-        frame_index,
-    )
-
-    return image
-
-
-def _render_static_cloud_and_bolt(
-    weather: CurrentWeather,
-    *,
-    locale: str,
-    temperature_unit: TemperatureUnit,
-) -> Image.Image:
-    panel = render_weather_panel(
-        weather,
-        locale=locale,
-        temperature_unit=temperature_unit,
-    )
-
-    draw = ImageDraw.Draw(panel)
-
-    _clear_weather_icon(draw)
-
-    _draw_cloud(
-        draw,
-        origin=WEATHER_ICON_ORIGIN,
-        size=WEATHER_ICON_SIZE,
-        bright=True,
-    )
-
-    _draw_bolt(
-        draw,
-        origin=WEATHER_ICON_ORIGIN,
-        size=WEATHER_ICON_SIZE,
+    draw.ellipse(
+        (cx - radius, cy - radius, cx + radius, cy + radius),
         fill=WEATHER_SUN_COLOR,
-        outline=WEATHER_SUN_RAY_COLOR,
-        highlight=True,
     )
 
-    return panel
+    for i in range(8):
+        angle = i * math.pi / 4
+        x1 = cx + round(ray_inner * math.cos(angle))
+        y1 = cy + round(ray_inner * math.sin(angle))
+        x2 = cx + round(ray_outer * math.cos(angle))
+        y2 = cy + round(ray_outer * math.sin(angle))
+        draw.line((x1, y1, x2, y2), fill=WEATHER_SUN_RAY_COLOR, width=ray_width)
 
 
-def _draw_pulsing_bolt(
+def _draw_moon(
     draw: ImageDraw.ImageDraw,
+    *,
     origin: tuple[int, int],
     size: int,
-    frame_index: int,
 ) -> None:
-    _draw_cloud(
-        draw,
-        origin=origin,
-        size=size,
-        bright=True,
+    """Draw a crescent moon using two overlapping circles."""
+    cx = origin[0] + size // 2
+    cy = origin[1] + size // 2
+    radius = _scale(size, 8)
+    offset = _scale(size, 4)
+
+    draw.ellipse(
+        (cx - radius, cy - radius, cx + radius, cy + radius),
+        fill=_MOON_COLOR,
     )
 
-    if frame_index in (8, 11):
-        _draw_bolt(
-            draw,
-            origin=origin,
-            size=size,
-            fill=WEATHER_SUN_COLOR,
-            outline=WEATHER_SUN_RAY_COLOR,
-        )
-        return
-
-    if frame_index in (9, 10):
-        _draw_bolt(
-            draw,
-            origin=origin,
-            size=size,
-            fill=WEATHER_SUN_COLOR,
-            outline=FRAME_BRIGHT_COLOR,
-            highlight=True,
-        )
-        return
-
-    _draw_bolt(
-        draw,
-        origin=origin,
-        size=size,
-        fill=None,
-        outline=WEATHER_SUN_RAY_COLOR,
+    # Overlay to cut the crescent shape
+    draw.ellipse(
+        (
+            cx - radius + offset,
+            cy - radius - offset,
+            cx + radius + offset,
+            cy + radius - offset,
+        ),
+        fill=PANEL_COLOR,
     )
 
 
-def _draw_cloud_flash(
+def _draw_small_sun(
     draw: ImageDraw.ImageDraw,
+    *,
     origin: tuple[int, int],
     size: int,
-    frame_index: int,
 ) -> None:
-    strike = frame_index in (8, 9, 10)
+    """Draw a small sun peeking above the cloud for partly-cloudy day."""
+    cx = origin[0] + _scale(size, 24)
+    cy = origin[1] + _scale(size, 6)
+    radius = _scale(size, 5)
+    ray_inner = _scale(size, 7)
+    ray_outer = _scale(size, 10)
 
-    _draw_cloud(
-        draw,
-        origin=origin,
-        size=size,
-        bright=strike,
+    draw.ellipse(
+        (cx - radius, cy - radius, cx + radius, cy + radius),
+        fill=WEATHER_SUN_COLOR,
     )
 
-    if frame_index == 9:
-        _draw_bolt(
-            draw,
-            origin=origin,
-            size=size,
-            fill=WEATHER_SUN_COLOR,
-            outline=FRAME_BRIGHT_COLOR,
-            highlight=True,
-        )
-        return
+    for i in range(8):
+        angle = i * math.pi / 4
+        x1 = cx + round(ray_inner * math.cos(angle))
+        y1 = cy + round(ray_inner * math.sin(angle))
+        x2 = cx + round(ray_outer * math.cos(angle))
+        y2 = cy + round(ray_outer * math.sin(angle))
+        draw.line((x1, y1, x2, y2), fill=WEATHER_SUN_RAY_COLOR, width=1)
 
-    if strike:
-        _draw_bolt(
-            draw,
-            origin=origin,
-            size=size,
-            fill=WEATHER_SUN_COLOR,
-            outline=WEATHER_SUN_RAY_COLOR,
-        )
-        return
 
-    _draw_bolt(
-        draw,
-        origin=origin,
-        size=size,
-        fill=None,
-        outline=WEATHER_SUN_RAY_COLOR,
+def _draw_small_moon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    """Draw a small crescent moon peeking above the cloud for partly-cloudy night."""
+    cx = origin[0] + _scale(size, 23)
+    cy = origin[1] + _scale(size, 6)
+    radius = _scale(size, 4)
+    offset = _scale(size, 3)
+
+    draw.ellipse(
+        (cx - radius, cy - radius, cx + radius, cy + radius),
+        fill=_MOON_COLOR,
+    )
+
+    draw.ellipse(
+        (
+            cx - radius + offset,
+            cy - radius - offset,
+            cx + radius + offset,
+            cy + radius - offset,
+        ),
+        fill=PANEL_COLOR,
     )
 
 
@@ -318,10 +250,9 @@ def _draw_cloud(
     size: int,
     bright: bool,
 ) -> None:
+    """Draw a pixel-art cloud in the upper portion of the icon."""
     shadow_color = WEATHER_CLOUD_SHADOW_COLOR if bright else PANEL_COLOR
-
     cloud_color = WEATHER_CLOUD_COLOR if bright else WEATHER_CLOUD_SHADOW_COLOR
-
     highlight_color = FRAME_BRIGHT_COLOR if bright else WEATHER_CLOUD_COLOR
 
     shadow_points = (
@@ -343,10 +274,7 @@ def _draw_cloud(
         _point(origin, size, 3, 18),
     )
 
-    draw.polygon(
-        shadow_points,
-        fill=shadow_color,
-    )
+    draw.polygon(shadow_points, fill=shadow_color)
 
     cloud_points = (
         _point(origin, size, 2, 11),
@@ -367,10 +295,7 @@ def _draw_cloud(
         _point(origin, size, 2, 16),
     )
 
-    draw.polygon(
-        cloud_points,
-        fill=cloud_color,
-    )
+    draw.polygon(cloud_points, fill=cloud_color)
 
     draw.line(
         (
@@ -391,6 +316,7 @@ def _draw_bolt(
     outline: str,
     highlight: bool = False,
 ) -> None:
+    """Draw a lightning bolt in the lower portion of the icon."""
     points = (
         _point(origin, size, 18, 13),
         _point(origin, size, 11, 22),
@@ -402,10 +328,7 @@ def _draw_bolt(
     )
 
     if fill is not None:
-        draw.polygon(
-            points,
-            fill=fill,
-        )
+        draw.polygon(points, fill=fill)
 
     draw.line(
         (*points, points[0]),
@@ -424,20 +347,79 @@ def _draw_bolt(
         )
 
 
-def _clear_weather_icon(
+def _draw_rain(
     draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+    frame_index: int,
 ) -> None:
-    left, top = WEATHER_ICON_ORIGIN
+    """Draw animated raindrops in the lower portion of the icon."""
+    drop_size = max(2, _scale(size, 3))
+    animation_top = origin[1] + _scale(size, 18)
+    animation_height = size - _scale(size, 18)
+    slot_height = max(1, animation_height // 3)
 
-    draw.rectangle(
-        (
-            left,
-            top,
-            left + WEATHER_ICON_SIZE - 1,
-            top + WEATHER_ICON_SIZE - 1,
-        ),
-        fill=PANEL_COLOR,
+    columns = (
+        origin[0] + _scale(size, 5),
+        origin[0] + _scale(size, 13),
+        origin[0] + _scale(size, 21),
     )
+
+    # Each column shows one drop that cycles through 3 positions.
+    # Columns are staggered by one slot to look like falling rain.
+    for col_offset, col_x in enumerate(columns):
+        phase = (frame_index + col_offset) % 3
+        y = animation_top + phase * slot_height
+        draw_raindrop(draw, origin=(col_x, y), size=drop_size)
+
+
+def _draw_fog(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+    frame_index: int,
+) -> None:
+    """Draw animated fog lines spanning the icon."""
+    line_width = max(1, _scale(size, 2))
+    fog_ys = (
+        origin[1] + _scale(size, 8),
+        origin[1] + _scale(size, 16),
+        origin[1] + _scale(size, 24),
+    )
+    scroll = _scale(size, frame_index)
+
+    for i, line_y in enumerate(fog_ys):
+        offset = scroll if i % 2 == 0 else -scroll
+        x1 = max(origin[0], origin[0] + _scale(size, 4) + offset)
+        x2 = min(origin[0] + size, origin[0] + _scale(size, 28) + offset)
+
+        if x1 < x2:
+            draw.line((x1, line_y, x2, line_y), fill=_FOG_COLOR, width=line_width)
+
+
+def _draw_snow(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    """Draw snowflake dots in the lower portion of the icon."""
+    dot_size = max(1, _scale(size, 2))
+
+    positions = (
+        (6, 20),
+        (14, 23),
+        (22, 20),
+        (10, 28),
+        (20, 27),
+    )
+
+    for px, py in positions:
+        x = origin[0] + _scale(size, px)
+        y = origin[1] + _scale(size, py)
+        draw.ellipse((x, y, x + dot_size, y + dot_size), fill=WEATHER_CLOUD_COLOR)
 
 
 def _point(
@@ -457,25 +439,3 @@ def _scale(
     value: int,
 ) -> int:
     return round(size * value / 32)
-
-
-def _create_weather(
-    condition: WeatherCondition,
-) -> CurrentWeather:
-    base_weather = CurrentWeather(
-        condition=WeatherCondition.CLEAR,
-        temperature=19,
-        high_temperature=24,
-        low_temperature=8,
-        precipitation_probability=35,
-        is_day=True,
-    )
-
-    return replace(
-        base_weather,
-        condition=condition,
-    )
-
-
-if __name__ == "__main__":
-    main()

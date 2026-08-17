@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from typing import Final
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from PIL.ImageFont import BaseImageFont
@@ -13,18 +14,18 @@ from novachrono.design import (
 )
 from novachrono.pokemon_go import RaidBoss, RaidRoster, RaidTier
 
-ARTWORK_FRAME_SIZE = 32
-ARTWORK_SIZE = 28
-ARTWORK_LEFT = 17
+ARTWORK_FRAME_SIZE: Final = 32
+ARTWORK_SIZE: Final = 28
+ARTWORK_LEFT: Final = 17
 
-TEXT_LEFT = 56
-TEXT_RIGHT = 111
+TEXT_LEFT: Final = 56
+TEXT_RIGHT: Final = 111
 
-FIVE_STAR_SPARKLE_COUNT = 5
-FIVE_STAR_SPARKLE_SPACING = 6
-FIVE_STAR_SPARKLE_RADIUS = 2
+FIVE_STAR_SPARKLE_COUNT: Final = 5
+FIVE_STAR_SPARKLE_SPACING: Final = 6
+FIVE_STAR_SPARKLE_RADIUS: Final = 2
 
-SHINY_COLOR = "#FFD447"
+SHINY_COLOR: Final = "#FFD447"
 
 
 def render_raid_panel(
