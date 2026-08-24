@@ -5,13 +5,7 @@ from urllib.error import URLError
 import pytest
 from PIL import Image
 
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+from novachrono.pokemon_go import RaidBoss, RaidRoster
 from novachrono.sources.pokemon_artwork import fetch_raid_artwork
 
 
@@ -48,7 +42,6 @@ def test_fetch_raid_artwork_loads_duplicate_url_only_once() -> None:
         ),
         mega=(
             _create_boss(
-                tier=RaidTier.MEGA,
                 artwork_url=artwork_url,
             ),
         ),
@@ -60,6 +53,23 @@ def test_fetch_raid_artwork_loads_duplicate_url_only_once() -> None:
         fetch_raid_artwork(roster)
 
     assert mocked_urlopen.call_count == 1
+
+
+def test_fetch_raid_artwork_ignores_missing_url() -> None:
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url=None,
+            ),
+        ),
+        mega=(),
+    )
+
+    with patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen:
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+    mocked_urlopen.assert_not_called()
 
 
 def test_fetch_raid_artwork_ignores_insecure_url() -> None:
@@ -94,6 +104,27 @@ def test_fetch_raid_artwork_ignores_connection_error() -> None:
     with patch(
         "novachrono.sources.pokemon_artwork.urlopen",
         side_effect=URLError("Connection refused"),
+    ):
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+
+
+def test_fetch_raid_artwork_ignores_timeout() -> None:
+    artwork_url = "https://example.com/vesprit.png"
+
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+        mega=(),
+    )
+
+    with patch(
+        "novachrono.sources.pokemon_artwork.urlopen",
+        side_effect=TimeoutError(),
     ):
         artwork_by_url = fetch_raid_artwork(roster)
 
@@ -167,21 +198,10 @@ def _create_artwork_bytes() -> bytes:
 
 def _create_boss(
     *,
-    tier: RaidTier = RaidTier.FIVE_STAR,
     artwork_url: str | None,
 ) -> RaidBoss:
     return RaidBoss(
         name="Test Boss",
-        tier=tier,
         can_be_shiny=True,
-        types=(PokemonType.PSYCHIC,),
-        normal_combat_power=CombatPowerRange(
-            minimum=1669,
-            maximum=1747,
-        ),
-        boosted_combat_power=CombatPowerRange(
-            minimum=2086,
-            maximum=2184,
-        ),
         artwork_url=artwork_url,
     )

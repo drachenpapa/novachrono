@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
+from PIL.ImageFont import BaseImageFont
 
 from novachrono.design.theme import (
     CONTENT_LEFT,
@@ -94,12 +95,6 @@ def draw_placeholder_header(
     )
 
     draw.line(
-        (55, 118, 73, 118),
-        fill=accent_color,
-        width=2,
-    )
-
-    draw.line(
         (61, 64, 67, 64),
         fill=SUBTLE_TEXT_COLOR,
         width=1,
@@ -110,6 +105,48 @@ def draw_placeholder_header(
         fill=SUBTLE_TEXT_COLOR,
         width=1,
     )
+
+
+def find_font_that_fits(
+    draw: ImageDraw.ImageDraw,
+    *,
+    text: str,
+    maximum_width: int,
+    font_sizes: tuple[int, ...],
+) -> BaseImageFont:
+    """Return the largest requested font that fits the available width."""
+
+    for font_size in font_sizes:
+        font = ImageFont.load_default(size=font_size)
+
+        if (
+            text_width(
+                draw,
+                text=text,
+                font=font,
+            )
+            <= maximum_width
+        ):
+            return font
+
+    return ImageFont.load_default(size=font_sizes[-1])
+
+
+def text_width(
+    draw: ImageDraw.ImageDraw,
+    *,
+    text: str,
+    font: BaseImageFont,
+) -> int:
+    """Measure rendered text width."""
+
+    bounding_box = draw.textbbox(
+        (0, 0),
+        text,
+        font=font,
+    )
+
+    return bounding_box[2] - bounding_box[0]
 
 
 def _draw_hud_frame(draw: ImageDraw.ImageDraw) -> None:

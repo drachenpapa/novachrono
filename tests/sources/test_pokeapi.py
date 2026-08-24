@@ -1,40 +1,46 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+import pytest
+
+from novachrono.pokemon_go import RaidBoss, RaidRoster
 from novachrono.sources.pokeapi import (
+    PokeApiError,
     fetch_localized_pokemon_name,
     localize_raid_roster,
 )
 
 
-def create_response(localized_name: str) -> MagicMock:
-    response = MagicMock()
+def _create_response(localized_name: str) -> MagicMock:
+    return _create_raw_response(
+        json.dumps(
+            {
+                "names": [
+                    {
+                        "language": {
+                            "name": "en",
+                        },
+                        "name": "English Name",
+                    },
+                    {
+                        "language": {
+                            "name": "de",
+                        },
+                        "name": localized_name,
+                    },
+                ]
+            }
+        )
+    )
 
-    response.read.return_value = json.dumps(
-        {
-            "names": [
-                {
-                    "language": {
-                        "name": "en",
-                    },
-                    "name": "English Name",
-                },
-                {
-                    "language": {
-                        "name": "de",
-                    },
-                    "name": localized_name,
-                },
-            ]
-        }
-    ).encode("utf-8")
+
+def _create_raw_response(body: str) -> MagicMock:
+    return _create_bytes_response(body.encode("utf-8"))
+
+
+def _create_bytes_response(body: bytes) -> MagicMock:
+    response = MagicMock()
+    response.read.return_value = body
 
     context_manager = MagicMock()
     context_manager.__enter__.return_value = response
@@ -47,7 +53,7 @@ def create_response(localized_name: str) -> MagicMock:
 def test_fetch_localized_pokemon_name_returns_german_name(
     mocked_urlopen: MagicMock,
 ) -> None:
-    mocked_urlopen.return_value = create_response("Selfe")
+    mocked_urlopen.return_value = _create_response("Selfe")
 
     name = fetch_localized_pokemon_name(
         "Uxie",
@@ -65,7 +71,7 @@ def test_fetch_localized_pokemon_name_returns_german_name(
 def test_fetch_localized_mega_name(
     mocked_urlopen: MagicMock,
 ) -> None:
-    mocked_urlopen.return_value = create_response("Lohgock")
+    mocked_urlopen.return_value = _create_response("Lohgock")
 
     name = fetch_localized_pokemon_name(
         "Mega Blaziken",
@@ -77,6 +83,24 @@ def test_fetch_localized_mega_name(
     request = mocked_urlopen.call_args.args[0]
 
     assert "/pokemon-species/blaziken/" in request.full_url
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
+def test_fetch_localized_mega_form_name(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response("Glurak")
+
+    name = fetch_localized_pokemon_name(
+        "Mega Charizard X",
+        locale="de_DE",
+    )
+
+    assert name == "Mega-Glurak X"
+
+    request = mocked_urlopen.call_args.args[0]
+
+    assert "/pokemon-species/charizard/" in request.full_url
 
 
 @patch("novachrono.sources.pokeapi.urlopen")
@@ -98,6 +122,38 @@ def test_localize_raid_roster_keeps_english_without_request(
 
 
 @patch("novachrono.sources.pokeapi.urlopen")
+def test_localize_raid_roster_preserves_boss_data(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.side_effect = [
+        _create_response("Vesprit"),
+        _create_response("Lohgock"),
+    ]
+
+    roster = _create_roster(
+        five_star_name="Mesprit",
+        mega_name="Mega Blaziken",
+    )
+
+    localized = localize_raid_roster(
+        roster,
+        locale="de_DE",
+    )
+
+    assert localized.five_star[0] == RaidBoss(
+        name="Vesprit",
+        can_be_shiny=True,
+        artwork_url="https://example.com/mesprit.png",
+    )
+
+    assert localized.mega[0] == RaidBoss(
+        name="Mega-Lohgock",
+        can_be_shiny=True,
+        artwork_url="https://example.com/mega-blaziken.png",
+    )
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
 def test_localize_raid_roster_falls_back_when_api_fails(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -113,11 +169,39 @@ def test_localize_raid_roster_falls_back_when_api_fails(
         locale="de_DE",
     )
 
-    assert localized.five_star[0].name == "Mesprit"
-    assert localized.five_star[0].artwork_url == "https://example.com/mesprit.png"
+    assert localized == roster
 
-    assert localized.mega[0].name == "Mega Blaziken"
-    assert localized.mega[0].artwork_url == "https://example.com/mega-blaziken.png"
+
+@patch("novachrono.sources.pokeapi.urlopen")
+def test_invalid_utf8_raises_poke_api_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_bytes_response(b"\xff")
+
+    with pytest.raises(
+        PokeApiError,
+        match="invalid UTF-8 response",
+    ):
+        fetch_localized_pokemon_name(
+            "Uxie",
+            locale="de_DE",
+        )
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
+def test_invalid_json_raises_poke_api_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_raw_response("definitely not json")
+
+    with pytest.raises(
+        PokeApiError,
+        match="invalid JSON",
+    ):
+        fetch_localized_pokemon_name(
+            "Uxie",
+            locale="de_DE",
+        )
 
 
 def _create_roster(
@@ -129,37 +213,14 @@ def _create_roster(
         five_star=(
             RaidBoss(
                 name=five_star_name,
-                tier=RaidTier.FIVE_STAR,
                 can_be_shiny=True,
-                types=(PokemonType.PSYCHIC,),
-                normal_combat_power=CombatPowerRange(
-                    minimum=1669,
-                    maximum=1747,
-                ),
-                boosted_combat_power=CombatPowerRange(
-                    minimum=2086,
-                    maximum=2184,
-                ),
                 artwork_url="https://example.com/mesprit.png",
             ),
         ),
         mega=(
             RaidBoss(
                 name=mega_name,
-                tier=RaidTier.MEGA,
                 can_be_shiny=True,
-                types=(
-                    PokemonType.FIRE,
-                    PokemonType.FIGHTING,
-                ),
-                normal_combat_power=CombatPowerRange(
-                    minimum=1788,
-                    maximum=1867,
-                ),
-                boosted_combat_power=CombatPowerRange(
-                    minimum=2235,
-                    maximum=2334,
-                ),
                 artwork_url="https://example.com/mega-blaziken.png",
             ),
         ),

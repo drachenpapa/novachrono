@@ -22,19 +22,16 @@ LONGITUDE = 8.80169
 
 
 def _create_response(payload: object) -> MagicMock:
-    response = MagicMock()
-    response.read.return_value = json.dumps(payload).encode("utf-8")
-
-    context_manager = MagicMock()
-    context_manager.__enter__.return_value = response
-    context_manager.__exit__.return_value = False
-
-    return context_manager
+    return _create_raw_response(json.dumps(payload))
 
 
 def _create_raw_response(body: str) -> MagicMock:
+    return _create_bytes_response(body.encode("utf-8"))
+
+
+def _create_bytes_response(body: bytes) -> MagicMock:
     response = MagicMock()
-    response.read.return_value = body.encode("utf-8")
+    response.read.return_value = body
 
     context_manager = MagicMock()
     context_manager.__enter__.return_value = response
@@ -247,6 +244,23 @@ def test_http_error_uses_open_meteo_reason(
     with pytest.raises(
         OpenMeteoError,
         match="Invalid latitude",
+    ):
+        fetch_current_weather(
+            latitude=LATITUDE,
+            longitude=LONGITUDE,
+            timezone=BERLIN,
+        )
+
+
+@patch("novachrono.sources.open_meteo.urlopen")
+def test_invalid_utf8_raises_open_meteo_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_bytes_response(b"\xff")
+
+    with pytest.raises(
+        OpenMeteoError,
+        match="invalid UTF-8 response",
     ):
         fetch_current_weather(
             latitude=LATITUDE,

@@ -48,8 +48,14 @@ def _create_response(
 def _create_raw_response(
     body: str,
 ) -> MagicMock:
+    return _create_bytes_response(body.encode("utf-8"))
+
+
+def _create_bytes_response(
+    body: bytes,
+) -> MagicMock:
     response = MagicMock()
-    response.read.return_value = body.encode("utf-8")
+    response.read.return_value = body
 
     context_manager = MagicMock()
     context_manager.__enter__.return_value = response
@@ -84,6 +90,11 @@ def test_config_strips_host_and_token() -> None:
         "   ",
         "http://192.168.178.50",
         "https://192.168.178.50",
+        f"{HOST}:9000",
+        f"{HOST}/divoom_api",
+        f"{HOST}?mode=test",
+        f"{HOST}#fragment",
+        "times gate.local",
     ],
 )
 def test_config_rejects_invalid_host(
@@ -355,10 +366,7 @@ def test_send_animation_sends_native_multi_frame_payload(
         assert payload["PicWidth"] == PANEL_SIZE
         assert payload["PicOffset"] == frame_index
         assert payload["PicSpeed"] == 10_000
-        assert isinstance(
-            payload["PicData"],
-            str,
-        )
+        assert isinstance(payload["PicData"], str)
 
 
 @patch("novachrono.outputs.times_gate.urlopen")
@@ -388,6 +396,36 @@ def test_send_animation_uses_different_picture_data_per_frame(
 
 
 @patch("novachrono.outputs.times_gate.urlopen")
+def test_send_animation_reports_failed_frame(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.side_effect = [
+        _create_response(
+            {
+                "ReturnCode": 0,
+            }
+        ),
+        URLError("Connection refused"),
+    ]
+
+    with pytest.raises(
+        TimesGateError,
+        match="animation frame 2/3",
+    ):
+        _create_client().send_animation(
+            panel_index=2,
+            images=(
+                _create_panel("#FF0000"),
+                _create_panel("#00FF00"),
+                _create_panel("#0000FF"),
+            ),
+            frame_duration_ms=5_000,
+        )
+
+    assert mocked_urlopen.call_count == 2
+
+
+@patch("novachrono.outputs.times_gate.urlopen")
 def test_api_error_raises_times_gate_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -414,6 +452,19 @@ def test_connection_error_raises_times_gate_error(
     with pytest.raises(
         TimesGateError,
         match="Could not reach Times Gate",
+    ):
+        _create_client().get_configuration()
+
+
+@patch("novachrono.outputs.times_gate.urlopen")
+def test_invalid_utf8_raises_times_gate_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_bytes_response(b"\xff")
+
+    with pytest.raises(
+        TimesGateError,
+        match="invalid UTF-8 response",
     ):
         _create_client().get_configuration()
 

@@ -61,6 +61,8 @@ def fetch_current_weather(
         raise OpenMeteoError(f"Could not reach Open-Meteo: {error.reason}") from error
     except TimeoutError as error:
         raise OpenMeteoError("Connection to Open-Meteo timed out") from error
+    except UnicodeDecodeError as error:
+        raise OpenMeteoError("Open-Meteo returned an invalid UTF-8 response") from error
 
     try:
         response_data = json.loads(response_body)
@@ -73,7 +75,9 @@ def fetch_current_weather(
     return _parse_weather_response(response_data)
 
 
-def map_weather_code(weather_code: int) -> WeatherCondition:
+def map_weather_code(
+    weather_code: int,
+) -> WeatherCondition:
     """Map an Open-Meteo WMO weather code to a Novachrono condition."""
 
     if weather_code in {0, 1}:
@@ -88,21 +92,7 @@ def map_weather_code(weather_code: int) -> WeatherCondition:
     if weather_code in {45, 48}:
         return WeatherCondition.FOG
 
-    if weather_code in {
-        51,
-        53,
-        55,
-        56,
-        57,
-        61,
-        63,
-        65,
-        66,
-        67,
-        80,
-        81,
-        82,
-    }:
+    if weather_code in {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82}:
         return WeatherCondition.RAIN
 
     if weather_code in {71, 73, 75, 77, 85, 86}:
@@ -136,20 +126,55 @@ def _build_request_url(
 def _parse_weather_response(
     response_data: dict[str, Any],
 ) -> CurrentWeather:
-    current = _read_mapping(response_data, "current")
-    daily = _read_mapping(response_data, "daily")
+    current = _read_mapping(
+        response_data,
+        "current",
+    )
+    daily = _read_mapping(
+        response_data,
+        "daily",
+    )
 
-    weather_code = _read_integer(current, "weather_code")
-    temperature = round(_read_number(current, "temperature_2m"))
+    weather_code = _read_integer(
+        current,
+        "weather_code",
+    )
 
-    high_temperature = round(_read_daily_number(daily, "temperature_2m_max"))
-    low_temperature = round(_read_daily_number(daily, "temperature_2m_min"))
-    precipitation_probability = round(_read_daily_number(daily, "precipitation_probability_max"))
+    temperature = round(
+        _read_number(
+            current,
+            "temperature_2m",
+        )
+    )
+
+    high_temperature = round(
+        _read_daily_number(
+            daily,
+            "temperature_2m_max",
+        )
+    )
+
+    low_temperature = round(
+        _read_daily_number(
+            daily,
+            "temperature_2m_min",
+        )
+    )
+
+    precipitation_probability = round(
+        _read_daily_number(
+            daily,
+            "precipitation_probability_max",
+        )
+    )
 
     if not 0 <= precipitation_probability <= 100:
         raise OpenMeteoError("Open-Meteo returned an invalid precipitation probability")
 
-    is_day_value = _read_integer(current, "is_day")
+    is_day_value = _read_integer(
+        current,
+        "is_day",
+    )
 
     if is_day_value not in {0, 1}:
         raise OpenMeteoError("Open-Meteo returned an invalid is_day value")
@@ -192,7 +217,10 @@ def _read_integer(
     data: dict[str, Any],
     name: str,
 ) -> int:
-    value = _read_number(data, name)
+    value = _read_number(
+        data,
+        name,
+    )
 
     if not value.is_integer():
         raise OpenMeteoError(f"Open-Meteo response contains invalid '{name}'")
@@ -211,20 +239,22 @@ def _read_daily_number(
 
     first_value = value[0]
 
-    if isinstance(first_value, bool) or not isinstance(
-        first_value,
-        int | float,
-    ):
+    if isinstance(first_value, bool) or not isinstance(first_value, int | float):
         raise OpenMeteoError(f"Open-Meteo response contains invalid '{name}'")
 
     return float(first_value)
 
 
-def _format_http_error(error: HTTPError) -> str:
+def _format_http_error(
+    error: HTTPError,
+) -> str:
     try:
         response_body = error.read().decode("utf-8")
         response_data = json.loads(response_body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ):
         response_data = None
 
     if isinstance(response_data, dict):

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -19,17 +20,11 @@ from novachrono.dashboard import (
 )
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
 from novachrono.outputs.times_gate import TimesGateError
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+from novachrono.pokemon_go import RaidBoss, RaidRoster
 from novachrono.sources.open_meteo import OpenMeteoError
 from novachrono.sources.scraped_duck import ScrapedDuckError
 from novachrono.units import TemperatureUnit
-from novachrono.weather import CurrentWeather
+from novachrono.weather import CurrentWeather, WeatherCondition
 
 runner = CliRunner()
 
@@ -40,17 +35,7 @@ def multi_raid_roster(raid_roster: RaidRoster) -> RaidRoster:
 
     second_five_star = RaidBoss(
         name="Zamazenta",
-        tier=RaidTier.FIVE_STAR,
         can_be_shiny=True,
-        types=(PokemonType.FIGHTING,),
-        normal_combat_power=CombatPowerRange(
-            minimum=2100,
-            maximum=2188,
-        ),
-        boosted_combat_power=CombatPowerRange(
-            minimum=2625,
-            maximum=2735,
-        ),
     )
 
     return RaidRoster(
@@ -77,6 +62,7 @@ def test_help_lists_available_commands() -> None:
     assert "send-dashboard" in result.stdout
 
 
+@patch("novachrono.cli.fetch_raid_artwork")
 @patch("novachrono.cli._load_raid_roster")
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.load_config")
@@ -84,6 +70,7 @@ def test_preview_command_creates_preview(
     mocked_load_config: MagicMock,
     mocked_load_weather: MagicMock,
     mocked_load_raids: MagicMock,
+    mocked_fetch_artwork: MagicMock,
     tmp_path: Path,
     weather: CurrentWeather,
     raid_roster: RaidRoster,
@@ -91,6 +78,7 @@ def test_preview_command_creates_preview(
     mocked_load_config.return_value = _create_app_config()
     mocked_load_weather.return_value = weather
     mocked_load_raids.return_value = raid_roster
+    mocked_fetch_artwork.return_value = {}
 
     destination = tmp_path / "preview.png"
 
@@ -108,6 +96,7 @@ def test_preview_command_creates_preview(
 
 
 @patch("novachrono.cli.render_dashboard")
+@patch("novachrono.cli.fetch_raid_artwork")
 @patch("novachrono.cli._load_raid_roster")
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.load_config")
@@ -115,6 +104,7 @@ def test_preview_passes_external_data_to_dashboard(
     mocked_load_config: MagicMock,
     mocked_load_weather: MagicMock,
     mocked_load_raids: MagicMock,
+    mocked_fetch_artwork: MagicMock,
     mocked_render_dashboard: MagicMock,
     tmp_path: Path,
     weather: CurrentWeather,
@@ -125,9 +115,12 @@ def test_preview_passes_external_data_to_dashboard(
         temperature_unit=TemperatureUnit.FAHRENHEIT,
     )
 
+    artwork: dict[str, Image.Image] = {}
+
     mocked_load_config.return_value = app_config
     mocked_load_weather.return_value = weather
     mocked_load_raids.return_value = raid_roster
+    mocked_fetch_artwork.return_value = artwork
 
     mocked_render_dashboard.return_value = tuple(
         Image.new(
@@ -153,7 +146,7 @@ def test_preview_passes_external_data_to_dashboard(
     mocked_render_dashboard.assert_called_once_with(
         weather=weather,
         raid_roster=raid_roster,
-        raid_artwork={},
+        raid_artwork=artwork,
         timezone=app_config.timezone,
         locale=app_config.locale,
         temperature_unit=app_config.temperature_unit,
@@ -299,10 +292,69 @@ def test_send_weather_targets_weather_display_only(
     assert result.exit_code == 0
 
     mocked_load_raids.assert_not_called()
+    mocked_client.send_animation.assert_not_called()
 
     assert mocked_client.send_image.call_args.kwargs["panel_index"] == WEATHER_PANEL_INDEX
 
 
+@pytest.mark.parametrize(
+    ("condition", "expected_frame_count", "expected_duration_ms"),
+    [
+        (
+            WeatherCondition.RAIN,
+            3,
+            350,
+        ),
+        (
+            WeatherCondition.FOG,
+            10,
+            500,
+        ),
+    ],
+)
+@patch("novachrono.cli.TimesGateClient")
+@patch("novachrono.cli._load_current_weather")
+@patch("novachrono.cli.load_config")
+def test_send_weather_uses_animation_for_animated_conditions(
+    mocked_load_config: MagicMock,
+    mocked_load_weather: MagicMock,
+    mocked_client_class: MagicMock,
+    weather: CurrentWeather,
+    condition: WeatherCondition,
+    expected_frame_count: int,
+    expected_duration_ms: int,
+) -> None:
+    animated_weather = replace(
+        weather,
+        condition=condition,
+    )
+
+    mocked_load_config.return_value = _create_app_config()
+    mocked_load_weather.return_value = animated_weather
+
+    mocked_client = mocked_client_class.return_value
+    mocked_client.send_animation.return_value = tuple(
+        {"ReturnCode": 0} for _ in range(expected_frame_count)
+    )
+
+    result = runner.invoke(
+        app,
+        ["send-weather"],
+    )
+
+    assert result.exit_code == 0
+
+    mocked_client.send_image.assert_not_called()
+    mocked_client.send_animation.assert_called_once()
+
+    arguments = mocked_client.send_animation.call_args.kwargs
+
+    assert arguments["panel_index"] == WEATHER_PANEL_INDEX
+    assert len(arguments["images"]) == expected_frame_count
+    assert arguments["frame_duration_ms"] == expected_duration_ms
+
+
+@patch("novachrono.cli.fetch_raid_artwork")
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.TimesGateClient")
 @patch("novachrono.cli._load_raid_roster")
@@ -312,6 +364,7 @@ def test_send_pokemon_uses_static_image_for_single_frame(
     mocked_load_raids: MagicMock,
     mocked_client_class: MagicMock,
     mocked_load_weather: MagicMock,
+    mocked_fetch_artwork: MagicMock,
     raid_roster: RaidRoster,
 ) -> None:
     mocked_load_config.return_value = _create_app_config(
@@ -319,6 +372,7 @@ def test_send_pokemon_uses_static_image_for_single_frame(
         weather_longitude=None,
     )
     mocked_load_raids.return_value = raid_roster
+    mocked_fetch_artwork.return_value = {}
 
     mocked_client = mocked_client_class.return_value
     mocked_client.send_image.return_value = {
@@ -339,6 +393,7 @@ def test_send_pokemon_uses_static_image_for_single_frame(
     assert mocked_client.send_image.call_args.kwargs["panel_index"] == POKEMON_GO_PANEL_INDEX
 
 
+@patch("novachrono.cli.fetch_raid_artwork")
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.TimesGateClient")
 @patch("novachrono.cli._load_raid_roster")
@@ -348,6 +403,7 @@ def test_send_pokemon_uses_animation_for_multiple_bosses(
     mocked_load_raids: MagicMock,
     mocked_client_class: MagicMock,
     mocked_load_weather: MagicMock,
+    mocked_fetch_artwork: MagicMock,
     multi_raid_roster: RaidRoster,
 ) -> None:
     mocked_load_config.return_value = _create_app_config(
@@ -355,6 +411,7 @@ def test_send_pokemon_uses_animation_for_multiple_bosses(
         weather_longitude=None,
     )
     mocked_load_raids.return_value = multi_raid_roster
+    mocked_fetch_artwork.return_value = {}
 
     mocked_client = mocked_client_class.return_value
     mocked_client.send_animation.return_value = (
@@ -446,6 +503,7 @@ def test_send_weather_reports_times_gate_error(
     assert "Connection failed" in result.stderr
 
 
+@patch("novachrono.cli.fetch_raid_artwork")
 @patch("novachrono.cli._load_raid_roster")
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.TimesGateClient")
@@ -455,12 +513,14 @@ def test_send_dashboard_uses_static_images_for_single_pokemon_frame(
     mocked_client_class: MagicMock,
     mocked_load_weather: MagicMock,
     mocked_load_raids: MagicMock,
+    mocked_fetch_artwork: MagicMock,
     weather: CurrentWeather,
     raid_roster: RaidRoster,
 ) -> None:
     mocked_load_config.return_value = _create_app_config()
     mocked_load_weather.return_value = weather
     mocked_load_raids.return_value = raid_roster
+    mocked_fetch_artwork.return_value = {}
 
     mocked_client = mocked_client_class.return_value
     mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
@@ -482,6 +542,7 @@ def test_send_dashboard_uses_static_images_for_single_pokemon_frame(
     assert panel_indices == list(range(PANEL_COUNT))
 
 
+@patch("novachrono.cli.fetch_raid_artwork")
 @patch("novachrono.cli._load_raid_roster")
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.TimesGateClient")
@@ -491,12 +552,14 @@ def test_send_dashboard_uses_animation_for_pokemon_display(
     mocked_client_class: MagicMock,
     mocked_load_weather: MagicMock,
     mocked_load_raids: MagicMock,
+    mocked_fetch_artwork: MagicMock,
     weather: CurrentWeather,
     multi_raid_roster: RaidRoster,
 ) -> None:
     mocked_load_config.return_value = _create_app_config()
     mocked_load_weather.return_value = weather
     mocked_load_raids.return_value = multi_raid_roster
+    mocked_fetch_artwork.return_value = {}
 
     mocked_client = mocked_client_class.return_value
     mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
@@ -523,6 +586,58 @@ def test_send_dashboard_uses_animation_for_pokemon_display(
     assert arguments["panel_index"] == POKEMON_GO_PANEL_INDEX
     assert len(arguments["images"]) == 2
     assert arguments["frame_duration_ms"] == 10_000
+
+
+@patch("novachrono.cli.fetch_raid_artwork")
+@patch("novachrono.cli._load_raid_roster")
+@patch("novachrono.cli._load_current_weather")
+@patch("novachrono.cli.TimesGateClient")
+@patch("novachrono.cli.load_config")
+def test_send_dashboard_uses_animation_for_weather_display(
+    mocked_load_config: MagicMock,
+    mocked_client_class: MagicMock,
+    mocked_load_weather: MagicMock,
+    mocked_load_raids: MagicMock,
+    mocked_fetch_artwork: MagicMock,
+    weather: CurrentWeather,
+    raid_roster: RaidRoster,
+) -> None:
+    rainy_weather = replace(
+        weather,
+        condition=WeatherCondition.RAIN,
+    )
+
+    mocked_load_config.return_value = _create_app_config()
+    mocked_load_weather.return_value = rainy_weather
+    mocked_load_raids.return_value = raid_roster
+    mocked_fetch_artwork.return_value = {}
+
+    mocked_client = mocked_client_class.return_value
+    mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
+    mocked_client.send_image.return_value = {
+        "ReturnCode": 0,
+    }
+    mocked_client.send_animation.return_value = (
+        {"ReturnCode": 0},
+        {"ReturnCode": 0},
+        {"ReturnCode": 0},
+    )
+
+    result = runner.invoke(
+        app,
+        ["send-dashboard"],
+    )
+
+    assert result.exit_code == 0
+
+    assert mocked_client.send_image.call_count == PANEL_COUNT - 1
+    mocked_client.send_animation.assert_called_once()
+
+    arguments = mocked_client.send_animation.call_args.kwargs
+
+    assert arguments["panel_index"] == WEATHER_PANEL_INDEX
+    assert len(arguments["images"]) == 3
+    assert arguments["frame_duration_ms"] == 350
 
 
 def _create_app_config(

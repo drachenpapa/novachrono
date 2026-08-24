@@ -21,7 +21,10 @@ FIXED_TIME = datetime(
 def test_render_clock_panel_has_expected_size_and_mode() -> None:
     panel = render_clock_panel(FIXED_TIME)
 
-    assert panel.size == (PANEL_SIZE, PANEL_SIZE)
+    assert panel.size == (
+        PANEL_SIZE,
+        PANEL_SIZE,
+    )
     assert panel.mode == "RGB"
 
 

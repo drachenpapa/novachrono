@@ -3,13 +3,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from novachrono.design import PANEL_SIZE
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+from novachrono.pokemon_go import RaidBoss, RaidRoster
 from novachrono.widgets.pokemon_go import (
     render_raid_animation,
     render_raid_panel,
@@ -50,8 +44,6 @@ def test_render_raid_panel_uses_provided_artwork() -> None:
         five_star=(
             _create_boss(
                 name="Vesprit",
-                tier=RaidTier.FIVE_STAR,
-                types=(PokemonType.PSYCHIC,),
                 artwork_url=artwork_url,
             ),
         ),
@@ -59,9 +51,9 @@ def test_render_raid_panel_uses_provided_artwork() -> None:
     )
 
     artwork = Image.new(
-        mode="RGBA",
+        mode="RGB",
         size=(4, 4),
-        color=(255, 0, 255, 255),
+        color=(255, 0, 255),
     )
 
     panel = render_raid_panel(
@@ -98,31 +90,21 @@ def test_render_raid_animation_rotates_all_bosses() -> None:
     five_star = (
         _create_boss(
             name="Five A",
-            tier=RaidTier.FIVE_STAR,
-            types=(PokemonType.PSYCHIC,),
         ),
         _create_boss(
             name="Five B",
-            tier=RaidTier.FIVE_STAR,
-            types=(PokemonType.FAIRY,),
         ),
         _create_boss(
             name="Five C",
-            tier=RaidTier.FIVE_STAR,
-            types=(PokemonType.DRAGON,),
         ),
     )
 
     mega = (
         _create_boss(
             name="Mega A",
-            tier=RaidTier.MEGA,
-            types=(PokemonType.FIRE,),
         ),
         _create_boss(
             name="Mega B",
-            tier=RaidTier.MEGA,
-            types=(PokemonType.WATER,),
         ),
     )
 
@@ -160,13 +142,9 @@ def test_render_raid_animation_preserves_empty_tier() -> None:
     five_star = (
         _create_boss(
             name="Five A",
-            tier=RaidTier.FIVE_STAR,
-            types=(PokemonType.PSYCHIC,),
         ),
         _create_boss(
             name="Five B",
-            tier=RaidTier.FIVE_STAR,
-            types=(PokemonType.FAIRY,),
         ),
     )
 
@@ -199,18 +177,11 @@ def _create_roster() -> RaidRoster:
         five_star=(
             _create_boss(
                 name="Vesprit",
-                tier=RaidTier.FIVE_STAR,
-                types=(PokemonType.PSYCHIC,),
             ),
         ),
         mega=(
             _create_boss(
                 name="Mega-Lohgock",
-                tier=RaidTier.MEGA,
-                types=(
-                    PokemonType.FIRE,
-                    PokemonType.FIGHTING,
-                ),
             ),
         ),
     )
@@ -219,22 +190,10 @@ def _create_roster() -> RaidRoster:
 def _create_boss(
     *,
     name: str,
-    tier: RaidTier,
-    types: tuple[PokemonType, ...],
     artwork_url: str | None = None,
 ) -> RaidBoss:
     return RaidBoss(
         name=name,
-        tier=tier,
         can_be_shiny=True,
-        types=types,
-        normal_combat_power=CombatPowerRange(
-            minimum=1669,
-            maximum=1747,
-        ),
-        boosted_combat_power=CombatPowerRange(
-            minimum=2086,
-            maximum=2184,
-        ),
         artwork_url=artwork_url,
     )

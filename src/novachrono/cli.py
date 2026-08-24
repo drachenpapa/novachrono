@@ -1,12 +1,20 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Final, NoReturn
+from typing import Annotated, Any, Final, NoReturn
 
 import typer
 from PIL import Image
 
-from novachrono.config import AppConfig, ConfigError, load_config
+from novachrono.config import (
+    TIMES_GATE_HOST_VARIABLE,
+    TIMES_GATE_TOKEN_VARIABLE,
+    WEATHER_LATITUDE_VARIABLE,
+    WEATHER_LONGITUDE_VARIABLE,
+    AppConfig,
+    ConfigError,
+    load_config,
+)
 from novachrono.dashboard import (
     CLOCK_PANEL_INDEX,
     POKEMON_GO_PANEL_INDEX,
@@ -30,12 +38,14 @@ from novachrono.sources.scraped_duck import (
     ScrapedDuckError,
     fetch_raid_roster,
 )
-from novachrono.weather import CurrentWeather
+from novachrono.weather import CurrentWeather, WeatherCondition
 from novachrono.widgets.clock import render_clock_panel
 from novachrono.widgets.pokemon_go import render_raid_animation
-from novachrono.widgets.weather import render_weather_panel
+from novachrono.widgets.weather import render_weather_animation
 
 POKEMON_GO_FRAME_DURATION_MS: Final = 10_000
+RAIN_FRAME_DURATION_MS: Final = 350
+FOG_FRAME_DURATION_MS: Final = 500
 
 app = typer.Typer(
     name="novachrono",
@@ -48,7 +58,7 @@ HostOption = Annotated[
     str | None,
     typer.Option(
         "--host",
-        help=("Override the Times Gate host configured with NOVACHRONO_TIMES_GATE_HOST."),
+        help="Override the Times Gate host configured with NOVACHRONO_TIMES_GATE_HOST.",
         metavar="HOST",
     ),
 ]
@@ -57,7 +67,7 @@ TokenOption = Annotated[
     str | None,
     typer.Option(
         "--token",
-        help=("Override the Times Gate token configured with NOVACHRONO_TIMES_GATE_TOKEN."),
+        help="Override the Times Gate token configured with NOVACHRONO_TIMES_GATE_TOKEN.",
         metavar="TOKEN",
     ),
 ]
@@ -150,10 +160,11 @@ def send_clock(
 
     panel = render_clock_panel(datetime.now(app_config.timezone))
 
-    _send_single_panel(
+    _send_widget_frames(
         client=client,
         panel_index=CLOCK_PANEL_INDEX,
-        panel=panel,
+        frames=(panel,),
+        frame_duration_ms=None,
         name="Clock",
     )
 
@@ -175,16 +186,17 @@ def send_weather(
 
     weather = _load_current_weather(app_config)
 
-    panel = render_weather_panel(
+    frames = render_weather_animation(
         weather,
         locale=app_config.locale,
         temperature_unit=app_config.temperature_unit,
     )
 
-    _send_single_panel(
+    _send_widget_frames(
         client=client,
         panel_index=WEATHER_PANEL_INDEX,
-        panel=panel,
+        frames=frames,
+        frame_duration_ms=_weather_frame_duration_ms(weather.condition),
         name="Weather",
     )
 
@@ -212,9 +224,12 @@ def send_pokemon(
         artwork_by_url=raid_artwork,
     )
 
-    _send_pokemon_frames(
+    _send_widget_frames(
         client=client,
+        panel_index=POKEMON_GO_PANEL_INDEX,
         frames=frames,
+        frame_duration_ms=POKEMON_GO_FRAME_DURATION_MS,
+        name="Pokémon GO",
     )
 
 
@@ -246,10 +261,33 @@ def send_dashboard(
         temperature_unit=app_config.temperature_unit,
     )
 
+    weather_frames = render_weather_animation(
+        weather,
+        locale=app_config.locale,
+        temperature_unit=app_config.temperature_unit,
+    )
+
     pokemon_frames = render_raid_animation(
         raid_roster,
         artwork_by_url=raid_artwork,
     )
+
+    panel_frames: dict[
+        int,
+        tuple[
+            tuple[Image.Image, ...],
+            int | None,
+        ],
+    ] = {
+        WEATHER_PANEL_INDEX: (
+            weather_frames,
+            _weather_frame_duration_ms(weather.condition),
+        ),
+        POKEMON_GO_PANEL_INDEX: (
+            pokemon_frames,
+            POKEMON_GO_FRAME_DURATION_MS,
+        ),
+    }
 
     failed_displays: list[int] = []
 
@@ -260,18 +298,18 @@ def send_dashboard(
 
         typer.echo(f"Sending display {display_number}/{len(panels)} ...")
 
+        frames, frame_duration_ms = panel_frames.get(
+            panel_index,
+            ((panel,), None),
+        )
+
         try:
-            if panel_index == POKEMON_GO_PANEL_INDEX and len(pokemon_frames) > 1:
-                client.send_animation(
-                    panel_index=panel_index,
-                    images=pokemon_frames,
-                    frame_duration_ms=POKEMON_GO_FRAME_DURATION_MS,
-                )
-            else:
-                client.send_image(
-                    panel_index=panel_index,
-                    image=panel,
-                )
+            _deliver_frames(
+                client=client,
+                panel_index=panel_index,
+                frames=frames,
+                frame_duration_ms=frame_duration_ms,
+            )
         except TimesGateError as error:
             failed_displays.append(display_number)
 
@@ -291,48 +329,12 @@ def send_dashboard(
     typer.echo("Dashboard sent successfully.")
 
 
-def _send_pokemon_frames(
-    *,
-    client: TimesGateClient,
-    frames: tuple[Image.Image, ...],
-) -> None:
-    display_number = POKEMON_GO_PANEL_INDEX + 1
-
-    typer.echo(f"Sending Pokémon GO to display {display_number} ...")
-
-    try:
-        if len(frames) == 1:
-            response = client.send_image(
-                panel_index=POKEMON_GO_PANEL_INDEX,
-                image=frames[0],
-            )
-
-            responses = (response,)
-        else:
-            responses = client.send_animation(
-                panel_index=POKEMON_GO_PANEL_INDEX,
-                images=frames,
-                frame_duration_ms=POKEMON_GO_FRAME_DURATION_MS,
-            )
-    except TimesGateError as error:
-        _exit_with_error(str(error))
-
-    typer.echo(f"Pokémon GO sent successfully with {len(frames)} frame(s).")
-
-    typer.echo(
-        json.dumps(
-            responses,
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-
-
-def _send_single_panel(
+def _send_widget_frames(
     *,
     client: TimesGateClient,
     panel_index: int,
-    panel: Image.Image,
+    frames: tuple[Image.Image, ...],
+    frame_duration_ms: int | None,
     name: str,
 ) -> None:
     display_number = panel_index + 1
@@ -340,22 +342,66 @@ def _send_single_panel(
     typer.echo(f"Sending {name.lower()} to display {display_number} ...")
 
     try:
-        response = client.send_image(
+        responses = _deliver_frames(
+            client=client,
             panel_index=panel_index,
-            image=panel,
+            frames=frames,
+            frame_duration_ms=frame_duration_ms,
         )
     except TimesGateError as error:
         _exit_with_error(str(error))
 
-    typer.echo(f"{name} sent successfully.")
+    typer.echo(f"{name} sent successfully with {len(frames)} frame(s).")
+
+    response_output: object
+    response_output = responses[0] if len(responses) == 1 else responses
 
     typer.echo(
         json.dumps(
-            response,
+            response_output,
             indent=2,
             ensure_ascii=False,
         )
     )
+
+
+def _deliver_frames(
+    *,
+    client: TimesGateClient,
+    panel_index: int,
+    frames: tuple[Image.Image, ...],
+    frame_duration_ms: int | None,
+) -> tuple[dict[str, Any], ...]:
+    if len(frames) == 1:
+        response = client.send_image(
+            panel_index=panel_index,
+            image=frames[0],
+        )
+
+        return (response,)
+
+    if frame_duration_ms is None:
+        raise ValueError("Animated panel requires a frame duration")
+
+    return client.send_animation(
+        panel_index=panel_index,
+        images=frames,
+        frame_duration_ms=frame_duration_ms,
+    )
+
+
+def _weather_frame_duration_ms(
+    condition: WeatherCondition,
+) -> int | None:
+    match condition:
+        case WeatherCondition.RAIN:
+            return RAIN_FRAME_DURATION_MS
+
+        case WeatherCondition.FOG:
+            return FOG_FRAME_DURATION_MS
+
+        case _:
+            return None
 
 
 def _load_current_weather(
@@ -368,10 +414,10 @@ def _load_current_weather(
         missing_variables: list[str] = []
 
         if latitude is None:
-            missing_variables.append("NOVACHRONO_WEATHER_LATITUDE")
+            missing_variables.append(WEATHER_LATITUDE_VARIABLE)
 
         if longitude is None:
-            missing_variables.append("NOVACHRONO_WEATHER_LONGITUDE")
+            missing_variables.append(WEATHER_LONGITUDE_VARIABLE)
 
         joined_variables = ", ".join(missing_variables)
 
@@ -428,10 +474,10 @@ def _create_times_gate_client(
         missing_variables: list[str] = []
 
         if resolved_host is None:
-            missing_variables.append("NOVACHRONO_TIMES_GATE_HOST")
+            missing_variables.append(TIMES_GATE_HOST_VARIABLE)
 
         if resolved_token is None:
-            missing_variables.append("NOVACHRONO_TIMES_GATE_TOKEN")
+            missing_variables.append(TIMES_GATE_TOKEN_VARIABLE)
 
         joined_variables = ", ".join(missing_variables)
 

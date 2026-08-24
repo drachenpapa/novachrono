@@ -7,13 +7,7 @@ from PIL import Image
 
 from novachrono.dashboard import render_dashboard
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+from novachrono.pokemon_go import RaidRoster
 from novachrono.preview import create_preview, save_preview
 from novachrono.weather import CurrentWeather
 
@@ -29,38 +23,16 @@ FIXED_TIME = datetime(
 )
 
 
-def _create_test_raid_roster() -> RaidRoster:
-    return RaidRoster(
-        five_star=(
-            RaidBoss(
-                name="Zacian",
-                tier=RaidTier.FIVE_STAR,
-                can_be_shiny=True,
-                types=(
-                    PokemonType.FAIRY,
-                    PokemonType.STEEL,
-                ),
-                normal_combat_power=CombatPowerRange(
-                    minimum=2100,
-                    maximum=2188,
-                ),
-                boosted_combat_power=CombatPowerRange(
-                    minimum=2625,
-                    maximum=2735,
-                ),
-            ),
-        ),
-        mega=(),
-    )
-
-
 @pytest.fixture
-def dashboard(weather: CurrentWeather) -> tuple[Image.Image, ...]:
+def dashboard(
+    weather: CurrentWeather,
+    raid_roster: RaidRoster,
+) -> tuple[Image.Image, ...]:
     return tuple(
         render_dashboard(
             FIXED_TIME,
             weather=weather,
-            raid_roster=_create_test_raid_roster(),
+            raid_roster=raid_roster,
         )
     )
 

@@ -137,12 +137,56 @@ def test_weather_coordinates_must_be_configured_together(
 
 
 @pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [
+        (-90, -180),
+        (-90, 180),
+        (90, -180),
+        (90, 180),
+    ],
+)
+def test_weather_coordinates_accept_boundary_values(
+    latitude: int,
+    longitude: int,
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        f"NOVACHRONO_WEATHER_LATITUDE={latitude}",
+        f"NOVACHRONO_WEATHER_LONGITUDE={longitude}",
+    )
+
+    config = load_config(env_file)
+
+    assert config.weather.latitude == latitude
+    assert config.weather.longitude == longitude
+
+
+@pytest.mark.parametrize(
     ("variable", "value", "message"),
     [
-        ("NOVACHRONO_WEATHER_LATITUDE", "91", "latitude must be between"),
-        ("NOVACHRONO_WEATHER_LATITUDE", "-91", "latitude must be between"),
-        ("NOVACHRONO_WEATHER_LONGITUDE", "181", "longitude must be between"),
-        ("NOVACHRONO_WEATHER_LONGITUDE", "-181", "longitude must be between"),
+        (
+            "NOVACHRONO_WEATHER_LATITUDE",
+            "91",
+            "latitude must be between",
+        ),
+        (
+            "NOVACHRONO_WEATHER_LATITUDE",
+            "-91",
+            "latitude must be between",
+        ),
+        (
+            "NOVACHRONO_WEATHER_LONGITUDE",
+            "181",
+            "longitude must be between",
+        ),
+        (
+            "NOVACHRONO_WEATHER_LONGITUDE",
+            "-181",
+            "longitude must be between",
+        ),
     ],
 )
 def test_weather_coordinates_reject_out_of_range_values(
@@ -237,14 +281,38 @@ def test_invalid_locale_raises_config_error(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("configured_value", "expected_unit"),
     [
-        ("C", TemperatureUnit.CELSIUS),
-        ("c", TemperatureUnit.CELSIUS),
-        ("CELSIUS", TemperatureUnit.CELSIUS),
-        ("celsius", TemperatureUnit.CELSIUS),
-        ("F", TemperatureUnit.FAHRENHEIT),
-        ("f", TemperatureUnit.FAHRENHEIT),
-        ("FAHRENHEIT", TemperatureUnit.FAHRENHEIT),
-        ("fahrenheit", TemperatureUnit.FAHRENHEIT),
+        (
+            "C",
+            TemperatureUnit.CELSIUS,
+        ),
+        (
+            "c",
+            TemperatureUnit.CELSIUS,
+        ),
+        (
+            "CELSIUS",
+            TemperatureUnit.CELSIUS,
+        ),
+        (
+            "celsius",
+            TemperatureUnit.CELSIUS,
+        ),
+        (
+            "F",
+            TemperatureUnit.FAHRENHEIT,
+        ),
+        (
+            "f",
+            TemperatureUnit.FAHRENHEIT,
+        ),
+        (
+            "FAHRENHEIT",
+            TemperatureUnit.FAHRENHEIT,
+        ),
+        (
+            "fahrenheit",
+            TemperatureUnit.FAHRENHEIT,
+        ),
     ],
 )
 def test_temperature_unit_accepts_supported_values(

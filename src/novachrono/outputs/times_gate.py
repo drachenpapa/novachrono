@@ -37,7 +37,11 @@ class TimesGateConfig:
         if not normalized_host:
             raise ValueError("Times Gate host must not be empty")
 
-        if "://" in normalized_host:
+        if (
+            "://" in normalized_host
+            or any(character in normalized_host for character in (":", "/", "?", "#"))
+            or any(character.isspace() for character in normalized_host)
+        ):
             raise ValueError("Times Gate host must contain only the hostname or IP address")
 
         if not self.local_token.strip():
@@ -46,7 +50,12 @@ class TimesGateConfig:
         if self.timeout_seconds <= 0:
             raise ValueError("Times Gate timeout must be greater than zero")
 
-        object.__setattr__(self, "host", normalized_host)
+        object.__setattr__(
+            self,
+            "host",
+            normalized_host,
+        )
+
         object.__setattr__(
             self,
             "local_token",
@@ -66,17 +75,24 @@ class TimesGateConfig:
 class TimesGateClient:
     """Communicate with a Divoom Times Gate over the local network."""
 
-    def __init__(self, config: TimesGateConfig) -> None:
+    def __init__(
+        self,
+        config: TimesGateConfig,
+    ) -> None:
         self._config = config
         self._next_picture_id = int(time.time())
 
     @property
-    def config(self) -> TimesGateConfig:
+    def config(
+        self,
+    ) -> TimesGateConfig:
         """Return the client configuration."""
 
         return self._config
 
-    def get_configuration(self) -> dict[str, Any]:
+    def get_configuration(
+        self,
+    ) -> dict[str, Any]:
         """Retrieve the current Times Gate configuration."""
 
         return self._post(
@@ -96,12 +112,10 @@ class TimesGateClient:
         _validate_panel_index(panel_index)
         _validate_image_size(image)
 
-        lcd_array = _create_lcd_array(panel_index)
-
         payload = {
             "Command": "Draw/SendHttpGif",
             "LocalToken": self._config.local_token,
-            "LcdArray": lcd_array,
+            "LcdArray": _create_lcd_array(panel_index),
             "PicNum": 1,
             "PicWidth": PANEL_SIZE,
             "PicOffset": 0,
@@ -122,12 +136,14 @@ class TimesGateClient:
         """Send a native multi-frame animation to one Times Gate display."""
 
         _validate_panel_index(panel_index)
+
         _validate_animation(
             images,
             frame_duration_ms=frame_duration_ms,
         )
 
         lcd_array = _create_lcd_array(panel_index)
+
         picture_id = self._new_picture_id()
 
         responses: list[dict[str, Any]] = []
@@ -145,11 +161,18 @@ class TimesGateClient:
                 "PicData": encode_image(image),
             }
 
-            responses.append(self._post(payload))
+            try:
+                responses.append(self._post(payload))
+            except TimesGateError as error:
+                raise TimesGateError(
+                    f"Could not send animation frame {frame_index + 1}/{len(images)}: {error}"
+                ) from error
 
         return tuple(responses)
 
-    def _new_picture_id(self) -> int:
+    def _new_picture_id(
+        self,
+    ) -> int:
         picture_id = self._next_picture_id
         self._next_picture_id += 1
 
@@ -186,13 +209,18 @@ class TimesGateClient:
             raise TimesGateError(
                 f"Connection to Times Gate at {self._config.api_url} timed out"
             ) from error
+        except UnicodeDecodeError as error:
+            raise TimesGateError("Times Gate returned an invalid UTF-8 response") from error
 
         try:
             response_data = json.loads(response_body)
         except json.JSONDecodeError as error:
             raise TimesGateError(f"Times Gate returned invalid JSON: {response_body!r}") from error
 
-        if not isinstance(response_data, dict):
+        if not isinstance(
+            response_data,
+            dict,
+        ):
             raise TimesGateError("Times Gate returned an unexpected response")
 
         _raise_for_api_error(response_data)
@@ -200,7 +228,9 @@ class TimesGateClient:
         return response_data
 
 
-def encode_image(image: Image.Image) -> str:
+def encode_image(
+    image: Image.Image,
+) -> str:
     """Encode a Pillow image as a Base64 JPEG."""
 
     buffer = io.BytesIO()
@@ -265,7 +295,10 @@ def _raise_for_api_error(
         response_data.get("error_code"),
     )
 
-    if return_code in (None, 0):
+    if return_code in (
+        None,
+        0,
+    ):
         return
 
     message = response_data.get(

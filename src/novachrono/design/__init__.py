@@ -4,6 +4,8 @@ from novachrono.design.components import (
     create_panel,
     draw_placeholder_header,
     draw_widget_header,
+    find_font_that_fits,
+    text_width,
 )
 from novachrono.design.theme import (
     BACKGROUND_COLOR,
@@ -54,4 +56,6 @@ __all__ = [
     "create_panel",
     "draw_placeholder_header",
     "draw_widget_header",
+    "find_font_that_fits",
+    "text_width",
 ]

@@ -4,13 +4,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+from novachrono.pokemon_go import RaidBoss, RaidRoster, RaidTier
 
 SCRAPED_DUCK_RAIDS_URL: Final = (
     "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.min.json"
@@ -51,6 +45,8 @@ def fetch_raid_roster(
         raise ScrapedDuckError(f"Could not reach ScrapedDuck: {error.reason}") from error
     except TimeoutError as error:
         raise ScrapedDuckError("Connection to ScrapedDuck timed out") from error
+    except UnicodeDecodeError as error:
+        raise ScrapedDuckError("ScrapedDuck returned an invalid UTF-8 response") from error
 
     try:
         response_data = json.loads(response_body)
@@ -63,7 +59,9 @@ def fetch_raid_roster(
     return _parse_raid_roster(response_data)
 
 
-def _parse_raid_roster(entries: list[Any]) -> RaidRoster:
+def _parse_raid_roster(
+    entries: list[Any],
+) -> RaidRoster:
     five_star: list[RaidBoss] = []
     mega: list[RaidBoss] = []
 
@@ -73,16 +71,10 @@ def _parse_raid_roster(entries: list[Any]) -> RaidRoster:
 
         tier = _parse_raid_tier(entry.get("tier"))
 
-        if tier is None:
+        if tier is None or _is_shadow_raid(entry):
             continue
 
-        if _is_shadow_raid(entry):
-            continue
-
-        raid_boss = _parse_raid_boss(
-            entry,
-            tier=tier,
-        )
+        raid_boss = _parse_raid_boss(entry)
 
         if tier is RaidTier.FIVE_STAR:
             five_star.append(raid_boss)
@@ -95,7 +87,9 @@ def _parse_raid_roster(entries: list[Any]) -> RaidRoster:
     )
 
 
-def _parse_raid_tier(value: Any) -> RaidTier | None:
+def _parse_raid_tier(
+    value: Any,
+) -> RaidTier | None:
     if value in {"5-Star Raids", "Tier 5"}:
         return RaidTier.FIVE_STAR
 
@@ -105,7 +99,9 @@ def _parse_raid_tier(value: Any) -> RaidTier | None:
     return None
 
 
-def _is_shadow_raid(data: dict[str, Any]) -> bool:
+def _is_shadow_raid(
+    data: dict[str, Any],
+) -> bool:
     name = data.get("name")
 
     if not isinstance(name, str):
@@ -116,94 +112,12 @@ def _is_shadow_raid(data: dict[str, Any]) -> bool:
 
 def _parse_raid_boss(
     data: dict[str, Any],
-    *,
-    tier: RaidTier,
 ) -> RaidBoss:
-    name = _read_string(data, "name")
-    can_be_shiny = _read_boolean(data, "canBeShiny")
-    types = _read_types(data)
-    artwork_url = _read_optional_image_url(data, "image")
-
-    combat_power = _read_mapping(data, "combatPower")
-    normal_combat_power = _read_combat_power_range(
-        combat_power,
-        "normal",
-    )
-    boosted_combat_power = _read_combat_power_range(
-        combat_power,
-        "boosted",
-    )
-
     return RaidBoss(
-        name=name,
-        tier=tier,
-        can_be_shiny=can_be_shiny,
-        types=types,
-        normal_combat_power=normal_combat_power,
-        boosted_combat_power=boosted_combat_power,
-        artwork_url=artwork_url,
+        name=_read_string(data, "name"),
+        can_be_shiny=_read_boolean(data, "canBeShiny"),
+        artwork_url=_read_optional_image_url(data, "image"),
     )
-
-
-def _read_types(
-    data: dict[str, Any],
-) -> tuple[PokemonType, ...]:
-    raw_types = data.get("types")
-
-    if not isinstance(raw_types, list) or not raw_types:
-        raise ScrapedDuckError("ScrapedDuck raid contains invalid 'types'")
-
-    parsed_types: list[PokemonType] = []
-
-    for raw_type in raw_types:
-        if not isinstance(raw_type, dict):
-            raise ScrapedDuckError("ScrapedDuck raid contains invalid 'types'")
-
-        type_name = _read_string(
-            raw_type,
-            "name",
-        ).lower()
-
-        try:
-            pokemon_type = PokemonType(type_name)
-        except ValueError as error:
-            raise ScrapedDuckError(
-                f"ScrapedDuck raid contains unsupported Pokemon type: {type_name}"
-            ) from error
-
-        parsed_types.append(pokemon_type)
-
-    return tuple(parsed_types)
-
-
-def _read_combat_power_range(
-    data: dict[str, Any],
-    name: str,
-) -> CombatPowerRange:
-    values = _read_mapping(data, name)
-
-    minimum = _read_integer(values, "min")
-    maximum = _read_integer(values, "max")
-
-    if minimum > maximum:
-        raise ScrapedDuckError(f"ScrapedDuck raid contains invalid '{name}' combat power range")
-
-    return CombatPowerRange(
-        minimum=minimum,
-        maximum=maximum,
-    )
-
-
-def _read_mapping(
-    data: dict[str, Any],
-    name: str,
-) -> dict[str, Any]:
-    value = data.get(name)
-
-    if not isinstance(value, dict):
-        raise ScrapedDuckError(f"ScrapedDuck raid contains invalid '{name}'")
-
-    return value
 
 
 def _read_string(
@@ -225,18 +139,6 @@ def _read_boolean(
     value = data.get(name)
 
     if not isinstance(value, bool):
-        raise ScrapedDuckError(f"ScrapedDuck raid contains invalid '{name}'")
-
-    return value
-
-
-def _read_integer(
-    data: dict[str, Any],
-    name: str,
-) -> int:
-    value = data.get(name)
-
-    if isinstance(value, bool) or not isinstance(value, int):
         raise ScrapedDuckError(f"ScrapedDuck raid contains invalid '{name}'")
 
     return value

@@ -3,7 +3,10 @@ import pytest
 from novachrono.units import TemperatureUnit, convert_temperature
 
 
-@pytest.mark.parametrize("temperature", [-40, -20, 0, 23, 40])
+@pytest.mark.parametrize(
+    "temperature",
+    [-40, -20, 0, 23, 40],
+)
 def test_celsius_conversion_keeps_original_temperature(
     temperature: int,
 ) -> None:

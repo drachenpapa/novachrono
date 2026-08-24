@@ -2,7 +2,6 @@ from collections.abc import Mapping
 from typing import Final
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-from PIL.ImageFont import BaseImageFont
 
 from novachrono.design import (
     FRAME_ACCENT_COLOR,
@@ -11,8 +10,13 @@ from novachrono.design import (
     TEXT_COLOR,
     create_panel,
     draw_widget_header,
+    find_font_that_fits,
 )
-from novachrono.pokemon_go import RaidBoss, RaidRoster, RaidTier
+from novachrono.pokemon_go import (
+    RaidBoss,
+    RaidRoster,
+    RaidTier,
+)
 
 ARTWORK_FRAME_SIZE: Final = 32
 ARTWORK_SIZE: Final = 28
@@ -54,7 +58,10 @@ def render_raid_panel(
         artwork_by_url=artwork_by_url,
     )
 
-    _draw_separator(draw, y=70)
+    _draw_separator(
+        draw,
+        y=70,
+    )
 
     _draw_raid_section(
         image,
@@ -229,7 +236,7 @@ def _draw_boss_name(
 ) -> None:
     available_width = right - left + 1
 
-    font = _find_font_that_fits(
+    font = find_font_that_fits(
         draw,
         text=name,
         maximum_width=available_width,
@@ -243,6 +250,7 @@ def _draw_boss_name(
     )
 
     text_height = bounding_box[3] - bounding_box[1]
+
     y = artwork_top + (artwork_height - text_height) // 2 - bounding_box[1]
 
     draw.text(
@@ -271,10 +279,7 @@ def _draw_boss_artwork(
         size=frame_size,
     )
 
-    artwork = _find_artwork(
-        boss,
-        artwork_by_url=artwork_by_url,
-    )
+    artwork = _find_artwork(boss, artwork_by_url=artwork_by_url)
 
     if artwork is None:
         _draw_artwork_placeholder(
@@ -284,9 +289,14 @@ def _draw_boss_artwork(
             size=frame_size,
         )
     else:
+        normalized_artwork = artwork.convert("RGBA")
+
         fitted_artwork = ImageOps.contain(
-            artwork,
-            (artwork_size, artwork_size),
+            normalized_artwork,
+            (
+                artwork_size,
+                artwork_size,
+            ),
             method=Image.Resampling.LANCZOS,
         )
 
@@ -407,7 +417,12 @@ def _draw_empty_state(
     font = ImageFont.load_default(size=8)
     text = "NO DATA"
 
-    bounding_box = draw.textbbox((0, 0), text, font=font)
+    bounding_box = draw.textbbox(
+        (0, 0),
+        text,
+        font=font,
+    )
+
     text_width = bounding_box[2] - bounding_box[0]
 
     x = (PANEL_SIZE - text_width) // 2
@@ -427,13 +442,23 @@ def _draw_separator(
     y: int,
 ) -> None:
     draw.line(
-        (17, y, PANEL_SIZE - 17, y),
+        (
+            17,
+            y,
+            PANEL_SIZE - 17,
+            y,
+        ),
         fill=FRAME_DIM_COLOR,
         width=1,
     )
 
     draw.line(
-        (47, y, 81, y),
+        (
+            47,
+            y,
+            81,
+            y,
+        ),
         fill=FRAME_ACCENT_COLOR,
         width=1,
     )
@@ -446,28 +471,18 @@ def _display_boss_name(
 ) -> str:
     normalized_name = name.strip()
 
-    if tier is RaidTier.MEGA and normalized_name.casefold().startswith(("mega ", "mega-")):
+    if tier is RaidTier.MEGA and normalized_name.casefold().startswith(
+        (
+            "mega ",
+            "mega-",
+        )
+    ):
         normalized_name = normalized_name[5:].strip()
 
     if "(" in normalized_name:
-        normalized_name = normalized_name.split("(", maxsplit=1)[0].strip()
+        normalized_name = normalized_name.split(
+            "(",
+            maxsplit=1,
+        )[0].strip()
 
     return normalized_name.upper()
-
-
-def _find_font_that_fits(
-    draw: ImageDraw.ImageDraw,
-    *,
-    text: str,
-    maximum_width: int,
-    font_sizes: tuple[int, ...],
-) -> BaseImageFont:
-    for font_size in font_sizes:
-        font = ImageFont.load_default(size=font_size)
-        bounding_box = draw.textbbox((0, 0), text, font=font)
-        width = bounding_box[2] - bounding_box[0]
-
-        if width <= maximum_width:
-            return font
-
-    return ImageFont.load_default(size=font_sizes[-1])

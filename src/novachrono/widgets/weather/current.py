@@ -11,6 +11,8 @@ from novachrono.design import (
     WEATHER_RAIN_COLOR,
     create_panel,
     draw_widget_header,
+    find_font_that_fits,
+    text_width,
 )
 from novachrono.i18n import DEFAULT_LOCALE, translate
 from novachrono.units import TemperatureUnit, convert_temperature
@@ -24,24 +26,9 @@ from novachrono.widgets.weather.icons import (
 WEATHER_ICON_ORIGIN: Final = (16, 34)
 WEATHER_ICON_SIZE: Final = 32
 
-RAIN_ANIMATION_FRAMES: Final = (
-    0,
-    1,
-    2,
-)
+RAIN_ANIMATION_FRAMES: Final = (0, 1, 2)
 
-FOG_ANIMATION_FRAMES: Final = (
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-)
+FOG_ANIMATION_FRAMES: Final = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 
 def render_weather_panel(
@@ -160,21 +147,14 @@ def _draw_current_weather(
         weather.temperature,
         temperature_unit,
     )
+
     temperature_text = f"{temperature}°{temperature_unit.value}"
 
-    temperature_font = _find_font_that_fits(
+    temperature_font = find_font_that_fits(
         draw,
         text=temperature_text,
         maximum_width=58,
-        font_sizes=(
-            31,
-            29,
-            27,
-            25,
-            23,
-            21,
-            19,
-        ),
+        font_sizes=(31, 29, 27, 25, 23, 21, 19),
     )
 
     _draw_centered_in_region(
@@ -230,6 +210,7 @@ def _draw_detail_row(
         weather.high_temperature,
         temperature_unit,
     )
+
     low_temperature = convert_temperature(
         weather.low_temperature,
         temperature_unit,
@@ -283,30 +264,25 @@ def _temperature_range_layout(
     temperature_unit: TemperatureUnit,
     maximum_width: int,
 ) -> tuple[str, BaseImageFont]:
-    """Choose the largest readable high/low temperature layout."""
+    """Choose the largest readable high/low-temperature layout."""
 
     spacious_text = f"{high_temperature} / {low_temperature} °{temperature_unit.value}"
+
     compact_text = f"{high_temperature}/{low_temperature}°{temperature_unit.value}"
 
     layouts = (
         spacious_text,
         compact_text,
     )
-    font_sizes = (
-        12,
-        11,
-        10,
-        9,
-        8,
-        7,
-    )
+
+    font_sizes = (12, 11, 10, 9, 8, 7)
 
     for font_size in font_sizes:
         font = ImageFont.load_default(size=font_size)
 
         for text in layouts:
             if (
-                _text_width(
+                text_width(
                     draw,
                     text=text,
                     font=font,
@@ -336,26 +312,21 @@ def _draw_precipitation_group(
     gap = 2
     region_width = right - left
 
-    font = _find_font_that_fits(
+    font = find_font_that_fits(
         draw,
         text=text,
-        maximum_width=region_width - droplet_size - gap,
-        font_sizes=(
-            13,
-            12,
-            11,
-            10,
-            9,
-        ),
+        maximum_width=(region_width - droplet_size - gap),
+        font_sizes=(13, 12, 11, 10, 9),
     )
 
-    text_width = _text_width(
+    rendered_text_width = text_width(
         draw,
         text=text,
         font=font,
     )
 
-    total_width = droplet_size + gap + text_width
+    total_width = droplet_size + gap + rendered_text_width
+
     start_x = left + (region_width - total_width) // 2
 
     draw_raindrop(
@@ -422,48 +393,6 @@ def _animation_icon_frames(
             return (0,)
 
 
-def _find_font_that_fits(
-    draw: ImageDraw.ImageDraw,
-    *,
-    text: str,
-    maximum_width: int,
-    font_sizes: tuple[int, ...],
-) -> BaseImageFont:
-    """Return the largest font that fits the available width."""
-
-    for font_size in font_sizes:
-        font = ImageFont.load_default(size=font_size)
-
-        if (
-            _text_width(
-                draw,
-                text=text,
-                font=font,
-            )
-            <= maximum_width
-        ):
-            return font
-
-    return ImageFont.load_default(size=font_sizes[-1])
-
-
-def _text_width(
-    draw: ImageDraw.ImageDraw,
-    *,
-    text: str,
-    font: BaseImageFont,
-) -> int:
-    """Measure rendered text width."""
-
-    bounding_box = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-    )
-
-    return bounding_box[2] - bounding_box[0]
-
-
 def _draw_centered_in_region(
     draw: ImageDraw.ImageDraw,
     *,
@@ -482,15 +411,14 @@ def _draw_centered_in_region(
         font=font,
     )
 
-    text_width = bounding_box[2] - bounding_box[0]
+    rendered_text_width = bounding_box[2] - bounding_box[0]
+
     region_width = right - left
-    x = left + (region_width - text_width) // 2 - bounding_box[0]
+
+    x = left + (region_width - rendered_text_width) // 2 - bounding_box[0]
 
     draw.text(
-        (
-            x,
-            y,
-        ),
+        (x, y),
         text,
         font=font,
         fill=fill,

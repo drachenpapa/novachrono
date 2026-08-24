@@ -1,12 +1,6 @@
 import pytest
 
-from novachrono.pokemon_go import (
-    CombatPowerRange,
-    PokemonType,
-    RaidBoss,
-    RaidRoster,
-    RaidTier,
-)
+from novachrono.pokemon_go import RaidBoss, RaidRoster
 from novachrono.weather import CurrentWeather, WeatherCondition
 
 
@@ -32,39 +26,15 @@ def raid_roster() -> RaidRoster:
         five_star=(
             RaidBoss(
                 name="Zacian",
-                tier=RaidTier.FIVE_STAR,
                 can_be_shiny=True,
-                types=(
-                    PokemonType.FAIRY,
-                    PokemonType.STEEL,
-                ),
-                normal_combat_power=CombatPowerRange(
-                    minimum=2100,
-                    maximum=2188,
-                ),
-                boosted_combat_power=CombatPowerRange(
-                    minimum=2625,
-                    maximum=2735,
-                ),
+                artwork_url="https://example.com/zacian.png",
             ),
         ),
         mega=(
             RaidBoss(
                 name="Mega Gengar",
-                tier=RaidTier.MEGA,
                 can_be_shiny=True,
-                types=(
-                    PokemonType.GHOST,
-                    PokemonType.POISON,
-                ),
-                normal_combat_power=CombatPowerRange(
-                    minimum=1566,
-                    maximum=1644,
-                ),
-                boosted_combat_power=CombatPowerRange(
-                    minimum=1958,
-                    maximum=2055,
-                ),
+                artwork_url="https://example.com/mega-gengar.png",
             ),
         ),
     )

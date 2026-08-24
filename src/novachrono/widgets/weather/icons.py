@@ -1,11 +1,11 @@
-import math
 from typing import Final
 
 from PIL import ImageDraw
 
 from novachrono.design import (
+    FRAME_ACCENT_COLOR,
     FRAME_BRIGHT_COLOR,
-    PANEL_COLOR,
+    FRAME_DIM_COLOR,
     WEATHER_CLOUD_COLOR,
     WEATHER_CLOUD_SHADOW_COLOR,
     WEATHER_RAIN_COLOR,
@@ -14,8 +14,24 @@ from novachrono.design import (
 )
 from novachrono.weather import WeatherCondition
 
-_MOON_COLOR: Final = "#C8E6F0"
-_FOG_COLOR: Final = WEATHER_CLOUD_SHADOW_COLOR
+FOG_FRAME_OFFSETS: Final = (
+    (-4, 0, 4),
+    (-3, 1, 3),
+    (-2, 2, 2),
+    (-1, 3, 1),
+    (0, 4, 0),
+    (1, 3, -1),
+    (2, 2, -2),
+    (3, 1, -3),
+    (4, 0, -4),
+    (2, -1, -3),
+)
+
+RAIN_FRAME_Y_OFFSETS: Final = (
+    (0, 2, 4),
+    (2, 4, 0),
+    (4, 0, 2),
+)
 
 
 def draw_weather_icon(
@@ -26,8 +42,9 @@ def draw_weather_icon(
     origin: tuple[int, int],
     size: int,
 ) -> None:
-    """Draw a static weather icon for the given condition."""
-    _draw_icon(
+    """Draw the static weather icon."""
+
+    draw_weather_icon_frame(
         draw,
         condition=condition,
         is_day=is_day,
@@ -46,15 +63,61 @@ def draw_weather_icon_frame(
     size: int,
     frame_index: int,
 ) -> None:
-    """Draw one animation frame of a weather icon."""
-    _draw_icon(
-        draw,
-        condition=condition,
-        is_day=is_day,
-        origin=origin,
-        size=size,
-        frame_index=frame_index,
-    )
+    """Draw one weather-icon animation frame."""
+
+    match condition:
+        case WeatherCondition.CLEAR:
+            _draw_clear_icon(
+                draw,
+                is_day=is_day,
+                origin=origin,
+                size=size,
+            )
+
+        case WeatherCondition.PARTLY_CLOUDY:
+            _draw_partly_cloudy_icon(
+                draw,
+                is_day=is_day,
+                origin=origin,
+                size=size,
+            )
+
+        case WeatherCondition.CLOUDY:
+            _draw_cloud_icon(
+                draw,
+                origin=origin,
+                size=size,
+            )
+
+        case WeatherCondition.FOG:
+            _draw_fog_icon(
+                draw,
+                origin=origin,
+                size=size,
+                frame_index=frame_index,
+            )
+
+        case WeatherCondition.RAIN:
+            _draw_rain_icon(
+                draw,
+                origin=origin,
+                size=size,
+                frame_index=frame_index,
+            )
+
+        case WeatherCondition.SNOW:
+            _draw_snow_icon(
+                draw,
+                origin=origin,
+                size=size,
+            )
+
+        case WeatherCondition.THUNDERSTORM:
+            _draw_thunderstorm_icon(
+                draw,
+                origin=origin,
+                size=size,
+            )
 
 
 def draw_raindrop(
@@ -63,73 +126,271 @@ def draw_raindrop(
     origin: tuple[int, int],
     size: int,
 ) -> None:
-    """Draw a small teardrop-shaped raindrop."""
-    x, y = origin
-    half = max(1, size // 2)
+    """Draw a compact precipitation drop with a bright highlight."""
 
-    # Pointed top triangle
+    left, top = origin
+    center_x = left + size // 2
+    bottom = top + size
+
     draw.polygon(
         (
-            (x + half, y),
-            (x, y + half),
-            (x + size, y + half),
+            (center_x, top),
+            (left + size - 2, top + 4),
+            (left + 1, top + 4),
         ),
         fill=WEATHER_RAIN_COLOR,
     )
 
-    # Round bottom ellipse
     draw.ellipse(
-        (x, y + half - 1, x + size, y + size),
+        (
+            left + 1,
+            top + 3,
+            left + size - 1,
+            bottom,
+        ),
         fill=WEATHER_RAIN_COLOR,
     )
 
+    if size >= 6:
+        draw.point(
+            (left + size // 2 - 1, top + size // 2),
+            fill=FRAME_BRIGHT_COLOR,
+        )
 
-def _draw_icon(
+
+def _draw_clear_icon(
     draw: ImageDraw.ImageDraw,
     *,
-    condition: WeatherCondition,
     is_day: bool,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    if is_day:
+        _draw_sun(
+            draw,
+            origin=origin,
+            size=size,
+        )
+        return
+
+    _draw_moon(
+        draw,
+        origin=origin,
+        size=size,
+    )
+
+
+def _draw_partly_cloudy_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    is_day: bool,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    if is_day:
+        _draw_sun(
+            draw,
+            origin=(origin[0] - 1, origin[1] - 1),
+            size=size - 4,
+        )
+    else:
+        _draw_moon(
+            draw,
+            origin=(origin[0] - 1, origin[1] - 1),
+            size=size - 4,
+        )
+
+    _draw_cloud(
+        draw,
+        origin=(origin[0] + 5, origin[1] + 10),
+        size=size - 6,
+    )
+
+
+def _draw_cloud_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    _draw_cloud(
+        draw,
+        origin=(origin[0] + 2, origin[1] + 7),
+        size=size - 4,
+    )
+
+
+def _draw_rain_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
     origin: tuple[int, int],
     size: int,
     frame_index: int,
 ) -> None:
-    match condition:
-        case WeatherCondition.CLEAR:
-            if is_day:
-                _draw_sun(draw, origin=origin, size=size)
-            else:
-                _draw_moon(draw, origin=origin, size=size)
+    _draw_cloud(
+        draw,
+        origin=(origin[0] + 2, origin[1] + 6),
+        size=size - 4,
+    )
 
-        case WeatherCondition.PARTLY_CLOUDY:
-            if is_day:
-                _draw_small_sun(draw, origin=origin, size=size)
-            else:
-                _draw_small_moon(draw, origin=origin, size=size)
-            _draw_cloud(draw, origin=origin, size=size, bright=True)
+    drop_offsets = RAIN_FRAME_Y_OFFSETS[frame_index % len(RAIN_FRAME_Y_OFFSETS)]
 
-        case WeatherCondition.CLOUDY:
-            _draw_cloud(draw, origin=origin, size=size, bright=True)
+    base_positions = (
+        (origin[0] + 8, origin[1] + 23),
+        (origin[0] + 14, origin[1] + 25),
+        (origin[0] + 20, origin[1] + 23),
+    )
 
-        case WeatherCondition.RAIN:
-            _draw_cloud(draw, origin=origin, size=size, bright=False)
-            _draw_rain(draw, origin=origin, size=size, frame_index=frame_index)
+    for (drop_x, drop_y), y_offset in zip(
+        base_positions,
+        drop_offsets,
+        strict=True,
+    ):
+        draw_raindrop(
+            draw,
+            origin=(drop_x, drop_y + y_offset),
+            size=4,
+        )
 
-        case WeatherCondition.FOG:
-            _draw_fog(draw, origin=origin, size=size, frame_index=frame_index)
 
-        case WeatherCondition.SNOW:
-            _draw_cloud(draw, origin=origin, size=size, bright=False)
-            _draw_snow(draw, origin=origin, size=size)
+def _draw_snow_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    center_x = origin[0] + size // 2
+    center_y = origin[1] + size // 2 + 1
+    radius = 9
 
-        case WeatherCondition.THUNDERSTORM:
-            _draw_cloud(draw, origin=origin, size=size, bright=True)
-            _draw_bolt(
-                draw,
-                origin=origin,
-                size=size,
-                fill=WEATHER_SUN_COLOR,
-                outline=WEATHER_SUN_RAY_COLOR,
-            )
+    draw.line(
+        (
+            center_x,
+            center_y - radius,
+            center_x,
+            center_y + radius,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+        width=1,
+    )
+
+    draw.line(
+        (
+            center_x - radius,
+            center_y,
+            center_x + radius,
+            center_y,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+        width=1,
+    )
+
+    draw.line(
+        (
+            center_x - 7,
+            center_y - 7,
+            center_x + 7,
+            center_y + 7,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+        width=1,
+    )
+
+    draw.line(
+        (
+            center_x - 7,
+            center_y + 7,
+            center_x + 7,
+            center_y - 7,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+        width=1,
+    )
+
+    _draw_snowflake_tips(
+        draw,
+        center_x=center_x,
+        center_y=center_y,
+    )
+
+
+def _draw_thunderstorm_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+) -> None:
+    _draw_cloud(
+        draw,
+        origin=(origin[0] + 2, origin[1] + 6),
+        size=size - 4,
+    )
+
+    bolt_points = (
+        (origin[0] + 15, origin[1] + 18),
+        (origin[0] + 11, origin[1] + 26),
+        (origin[0] + 15, origin[1] + 26),
+        (origin[0] + 13, origin[1] + 31),
+        (origin[0] + 21, origin[1] + 22),
+        (origin[0] + 17, origin[1] + 22),
+    )
+
+    draw.polygon(
+        bolt_points,
+        fill=WEATHER_SUN_COLOR,
+    )
+
+    draw.line(
+        (
+            origin[0] + 15,
+            origin[1] + 18,
+            origin[0] + 11,
+            origin[1] + 26,
+            origin[0] + 15,
+            origin[1] + 26,
+            origin[0] + 13,
+            origin[1] + 31,
+            origin[0] + 21,
+            origin[1] + 22,
+            origin[0] + 17,
+            origin[1] + 22,
+            origin[0] + 15,
+            origin[1] + 18,
+        ),
+        fill=FRAME_ACCENT_COLOR,
+        width=1,
+    )
+
+
+def _draw_fog_icon(
+    draw: ImageDraw.ImageDraw,
+    *,
+    origin: tuple[int, int],
+    size: int,
+    frame_index: int,
+) -> None:
+    offsets = FOG_FRAME_OFFSETS[frame_index % len(FOG_FRAME_OFFSETS)]
+
+    _draw_fog_band(
+        draw,
+        left=origin[0] + 3 + offsets[0],
+        y=origin[1] + 11,
+        width=20,
+    )
+
+    _draw_fog_band(
+        draw,
+        left=origin[0] + 8 + offsets[1],
+        y=origin[1] + 17,
+        width=16,
+    )
+
+    _draw_fog_band(
+        draw,
+        left=origin[0] + 5 + offsets[2],
+        y=origin[1] + 23,
+        width=18,
+    )
 
 
 def _draw_sun(
@@ -138,25 +399,35 @@ def _draw_sun(
     origin: tuple[int, int],
     size: int,
 ) -> None:
-    cx = origin[0] + size // 2
-    cy = origin[1] + size // 2
-    radius = _scale(size, 6)
-    ray_inner = _scale(size, 9)
-    ray_outer = _scale(size, 13)
-    ray_width = max(1, _scale(size, 2))
+    center_x = origin[0] + size // 2 - 1
+    center_y = origin[1] + size // 2 - 1
+    radius = 7
 
     draw.ellipse(
-        (cx - radius, cy - radius, cx + radius, cy + radius),
+        (
+            center_x - radius,
+            center_y - radius,
+            center_x + radius,
+            center_y + radius,
+        ),
         fill=WEATHER_SUN_COLOR,
     )
 
-    for i in range(8):
-        angle = i * math.pi / 4
-        x1 = cx + round(ray_inner * math.cos(angle))
-        y1 = cy + round(ray_inner * math.sin(angle))
-        x2 = cx + round(ray_outer * math.cos(angle))
-        y2 = cy + round(ray_outer * math.sin(angle))
-        draw.line((x1, y1, x2, y2), fill=WEATHER_SUN_RAY_COLOR, width=ray_width)
+    for ray in (
+        (center_x, center_y - 12, center_x, center_y - 9),
+        (center_x, center_y + 9, center_x, center_y + 12),
+        (center_x - 12, center_y, center_x - 9, center_y),
+        (center_x + 9, center_y, center_x + 12, center_y),
+        (center_x - 9, center_y - 9, center_x - 7, center_y - 7),
+        (center_x + 7, center_y - 7, center_x + 9, center_y - 9),
+        (center_x - 9, center_y + 9, center_x - 7, center_y + 7),
+        (center_x + 7, center_y + 7, center_x + 9, center_y + 9),
+    ):
+        draw.line(
+            ray,
+            fill=WEATHER_SUN_RAY_COLOR,
+            width=1,
+        )
 
 
 def _draw_moon(
@@ -165,81 +436,37 @@ def _draw_moon(
     origin: tuple[int, int],
     size: int,
 ) -> None:
-    """Draw a crescent moon using two overlapping circles."""
-    cx = origin[0] + size // 2
-    cy = origin[1] + size // 2
-    radius = _scale(size, 8)
-    offset = _scale(size, 4)
+    center_x = origin[0] + size // 2 - 2
+    center_y = origin[1] + size // 2 - 1
+    radius = 9
 
-    draw.ellipse(
-        (cx - radius, cy - radius, cx + radius, cy + radius),
-        fill=_MOON_COLOR,
-    )
-
-    # Overlay to cut the crescent shape
     draw.ellipse(
         (
-            cx - radius + offset,
-            cy - radius - offset,
-            cx + radius + offset,
-            cy + radius - offset,
+            center_x - radius,
+            center_y - radius,
+            center_x + radius,
+            center_y + radius,
         ),
-        fill=PANEL_COLOR,
-    )
-
-
-def _draw_small_sun(
-    draw: ImageDraw.ImageDraw,
-    *,
-    origin: tuple[int, int],
-    size: int,
-) -> None:
-    """Draw a small sun peeking above the cloud for partly-cloudy day."""
-    cx = origin[0] + _scale(size, 24)
-    cy = origin[1] + _scale(size, 6)
-    radius = _scale(size, 5)
-    ray_inner = _scale(size, 7)
-    ray_outer = _scale(size, 10)
-
-    draw.ellipse(
-        (cx - radius, cy - radius, cx + radius, cy + radius),
-        fill=WEATHER_SUN_COLOR,
-    )
-
-    for i in range(8):
-        angle = i * math.pi / 4
-        x1 = cx + round(ray_inner * math.cos(angle))
-        y1 = cy + round(ray_inner * math.sin(angle))
-        x2 = cx + round(ray_outer * math.cos(angle))
-        y2 = cy + round(ray_outer * math.sin(angle))
-        draw.line((x1, y1, x2, y2), fill=WEATHER_SUN_RAY_COLOR, width=1)
-
-
-def _draw_small_moon(
-    draw: ImageDraw.ImageDraw,
-    *,
-    origin: tuple[int, int],
-    size: int,
-) -> None:
-    """Draw a small crescent moon peeking above the cloud for partly-cloudy night."""
-    cx = origin[0] + _scale(size, 23)
-    cy = origin[1] + _scale(size, 6)
-    radius = _scale(size, 4)
-    offset = _scale(size, 3)
-
-    draw.ellipse(
-        (cx - radius, cy - radius, cx + radius, cy + radius),
-        fill=_MOON_COLOR,
+        fill=FRAME_BRIGHT_COLOR,
     )
 
     draw.ellipse(
         (
-            cx - radius + offset,
-            cy - radius - offset,
-            cx + radius + offset,
-            cy + radius - offset,
+            center_x - 2,
+            center_y - radius,
+            center_x + radius + 5,
+            center_y + radius,
         ),
-        fill=PANEL_COLOR,
+        fill="#020B14",
+    )
+
+    draw.point(
+        (center_x + 8, center_y - 7),
+        fill=FRAME_BRIGHT_COLOR,
+    )
+    draw.point(
+        (center_x + 11, center_y - 4),
+        fill=FRAME_BRIGHT_COLOR,
     )
 
 
@@ -248,194 +475,136 @@ def _draw_cloud(
     *,
     origin: tuple[int, int],
     size: int,
-    bright: bool,
 ) -> None:
-    """Draw a pixel-art cloud in the upper portion of the icon."""
-    shadow_color = WEATHER_CLOUD_SHADOW_COLOR if bright else PANEL_COLOR
-    cloud_color = WEATHER_CLOUD_COLOR if bright else WEATHER_CLOUD_SHADOW_COLOR
-    highlight_color = FRAME_BRIGHT_COLOR if bright else WEATHER_CLOUD_COLOR
+    left = origin[0]
+    top = origin[1]
 
-    shadow_points = (
-        _point(origin, size, 3, 12),
-        _point(origin, size, 6, 12),
-        _point(origin, size, 6, 9),
-        _point(origin, size, 10, 9),
-        _point(origin, size, 10, 6),
-        _point(origin, size, 15, 6),
-        _point(origin, size, 15, 4),
-        _point(origin, size, 20, 4),
-        _point(origin, size, 20, 6),
-        _point(origin, size, 24, 6),
-        _point(origin, size, 24, 9),
-        _point(origin, size, 28, 9),
-        _point(origin, size, 28, 12),
-        _point(origin, size, 30, 12),
-        _point(origin, size, 30, 18),
-        _point(origin, size, 3, 18),
+    shadow_offset = 1
+
+    draw.ellipse(
+        (
+            left + 3 + shadow_offset,
+            top + 7 + shadow_offset,
+            left + 13 + shadow_offset,
+            top + 17 + shadow_offset,
+        ),
+        fill=WEATHER_CLOUD_SHADOW_COLOR,
+    )
+    draw.ellipse(
+        (
+            left + 10 + shadow_offset,
+            top + 3 + shadow_offset,
+            left + 21 + shadow_offset,
+            top + 15 + shadow_offset,
+        ),
+        fill=WEATHER_CLOUD_SHADOW_COLOR,
+    )
+    draw.ellipse(
+        (
+            left + 18 + shadow_offset,
+            top + 7 + shadow_offset,
+            left + 27 + shadow_offset,
+            top + 16 + shadow_offset,
+        ),
+        fill=WEATHER_CLOUD_SHADOW_COLOR,
+    )
+    draw.rectangle(
+        (
+            left + 4 + shadow_offset,
+            top + 11 + shadow_offset,
+            left + 25 + shadow_offset,
+            top + 17 + shadow_offset,
+        ),
+        fill=WEATHER_CLOUD_SHADOW_COLOR,
     )
 
-    draw.polygon(shadow_points, fill=shadow_color)
-
-    cloud_points = (
-        _point(origin, size, 2, 11),
-        _point(origin, size, 5, 11),
-        _point(origin, size, 5, 8),
-        _point(origin, size, 9, 8),
-        _point(origin, size, 9, 5),
-        _point(origin, size, 14, 5),
-        _point(origin, size, 14, 3),
-        _point(origin, size, 19, 3),
-        _point(origin, size, 19, 5),
-        _point(origin, size, 23, 5),
-        _point(origin, size, 23, 8),
-        _point(origin, size, 27, 8),
-        _point(origin, size, 27, 11),
-        _point(origin, size, 29, 11),
-        _point(origin, size, 29, 16),
-        _point(origin, size, 2, 16),
+    draw.ellipse(
+        (
+            left + 3,
+            top + 6,
+            left + 13,
+            top + 16,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+    )
+    draw.ellipse(
+        (
+            left + 10,
+            top + 2,
+            left + 21,
+            top + 14,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+    )
+    draw.ellipse(
+        (
+            left + 18,
+            top + 6,
+            left + 27,
+            top + 15,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
+    )
+    draw.rectangle(
+        (
+            left + 4,
+            top + 10,
+            left + 25,
+            top + 16,
+        ),
+        fill=WEATHER_CLOUD_COLOR,
     )
 
-    draw.polygon(cloud_points, fill=cloud_color)
+
+def _draw_fog_band(
+    draw: ImageDraw.ImageDraw,
+    *,
+    left: int,
+    y: int,
+    width: int,
+) -> None:
+    right = left + width
 
     draw.line(
         (
-            *_point(origin, size, 14, 4),
-            *_point(origin, size, 19, 4),
+            left,
+            y,
+            right,
+            y,
         ),
-        fill=highlight_color,
+        fill=WEATHER_CLOUD_COLOR,
+        width=2,
+    )
+
+    draw.line(
+        (
+            left + 2,
+            y + 2,
+            right - 2,
+            y + 2,
+        ),
+        fill=FRAME_DIM_COLOR,
         width=1,
     )
 
 
-def _draw_bolt(
+def _draw_snowflake_tips(
     draw: ImageDraw.ImageDraw,
     *,
-    origin: tuple[int, int],
-    size: int,
-    fill: str | None,
-    outline: str,
-    highlight: bool = False,
+    center_x: int,
+    center_y: int,
 ) -> None:
-    """Draw a lightning bolt in the lower portion of the icon."""
-    points = (
-        _point(origin, size, 18, 13),
-        _point(origin, size, 11, 22),
-        _point(origin, size, 16, 22),
-        _point(origin, size, 13, 31),
-        _point(origin, size, 25, 19),
-        _point(origin, size, 19, 19),
-        _point(origin, size, 23, 13),
-    )
-
-    if fill is not None:
-        draw.polygon(points, fill=fill)
-
-    draw.line(
-        (*points, points[0]),
-        fill=outline,
-        width=max(1, _scale(size, 2)),
-    )
-
-    if highlight:
-        draw.line(
-            (
-                *_point(origin, size, 18, 16),
-                *_point(origin, size, 14, 21),
-            ),
+    for x_offset, y_offset in (
+        (0, -9),
+        (0, 9),
+        (-9, 0),
+        (9, 0),
+        (-7, -7),
+        (7, 7),
+        (-7, 7),
+        (7, -7),
+    ):
+        draw.point(
+            (center_x + x_offset, center_y + y_offset),
             fill=FRAME_BRIGHT_COLOR,
-            width=1,
         )
-
-
-def _draw_rain(
-    draw: ImageDraw.ImageDraw,
-    *,
-    origin: tuple[int, int],
-    size: int,
-    frame_index: int,
-) -> None:
-    """Draw animated raindrops in the lower portion of the icon."""
-    drop_size = max(2, _scale(size, 3))
-    animation_top = origin[1] + _scale(size, 18)
-    animation_height = size - _scale(size, 18)
-    slot_height = max(1, animation_height // 3)
-
-    columns = (
-        origin[0] + _scale(size, 5),
-        origin[0] + _scale(size, 13),
-        origin[0] + _scale(size, 21),
-    )
-
-    # Each column shows one drop that cycles through 3 positions.
-    # Columns are staggered by one slot to look like falling rain.
-    for col_offset, col_x in enumerate(columns):
-        phase = (frame_index + col_offset) % 3
-        y = animation_top + phase * slot_height
-        draw_raindrop(draw, origin=(col_x, y), size=drop_size)
-
-
-def _draw_fog(
-    draw: ImageDraw.ImageDraw,
-    *,
-    origin: tuple[int, int],
-    size: int,
-    frame_index: int,
-) -> None:
-    """Draw animated fog lines spanning the icon."""
-    line_width = max(1, _scale(size, 2))
-    fog_ys = (
-        origin[1] + _scale(size, 8),
-        origin[1] + _scale(size, 16),
-        origin[1] + _scale(size, 24),
-    )
-    scroll = _scale(size, frame_index)
-
-    for i, line_y in enumerate(fog_ys):
-        offset = scroll if i % 2 == 0 else -scroll
-        x1 = max(origin[0], origin[0] + _scale(size, 4) + offset)
-        x2 = min(origin[0] + size, origin[0] + _scale(size, 28) + offset)
-
-        if x1 < x2:
-            draw.line((x1, line_y, x2, line_y), fill=_FOG_COLOR, width=line_width)
-
-
-def _draw_snow(
-    draw: ImageDraw.ImageDraw,
-    *,
-    origin: tuple[int, int],
-    size: int,
-) -> None:
-    """Draw snowflake dots in the lower portion of the icon."""
-    dot_size = max(1, _scale(size, 2))
-
-    positions = (
-        (6, 20),
-        (14, 23),
-        (22, 20),
-        (10, 28),
-        (20, 27),
-    )
-
-    for px, py in positions:
-        x = origin[0] + _scale(size, px)
-        y = origin[1] + _scale(size, py)
-        draw.ellipse((x, y, x + dot_size, y + dot_size), fill=WEATHER_CLOUD_COLOR)
-
-
-def _point(
-    origin: tuple[int, int],
-    size: int,
-    x: int,
-    y: int,
-) -> tuple[int, int]:
-    return (
-        origin[0] + _scale(size, x),
-        origin[1] + _scale(size, y),
-    )
-
-
-def _scale(
-    size: int,
-    value: int,
-) -> int:
-    return round(size * value / 32)

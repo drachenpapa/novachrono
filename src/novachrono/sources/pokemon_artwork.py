@@ -1,5 +1,6 @@
 import io
-from urllib.error import HTTPError, URLError
+from typing import Final
+from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -7,7 +8,7 @@ from PIL import Image
 
 from novachrono.pokemon_go import RaidRoster
 
-DEFAULT_TIMEOUT_SECONDS = 6.0
+DEFAULT_TIMEOUT_SECONDS: Final = 6.0
 
 
 def fetch_raid_artwork(
@@ -34,11 +35,16 @@ def fetch_raid_artwork(
     return artwork_by_url
 
 
-def _artwork_urls(roster: RaidRoster) -> tuple[str, ...]:
+def _artwork_urls(
+    roster: RaidRoster,
+) -> tuple[str, ...]:
     artwork_urls: list[str] = []
     seen_urls: set[str] = set()
 
-    for boss in (*roster.five_star, *roster.mega):
+    for boss in (
+        *roster.five_star,
+        *roster.mega,
+    ):
         artwork_url = boss.artwork_url
 
         if artwork_url is None or artwork_url in seen_urls:
@@ -73,7 +79,10 @@ def _fetch_artwork(
             timeout=timeout_seconds,
         ) as response:
             image_data = response.read()
-    except (HTTPError, URLError, TimeoutError):
+    except (
+        URLError,
+        TimeoutError,
+    ):
         return None
 
     try:
@@ -85,13 +94,17 @@ def _fetch_artwork(
     return _trim_transparent_border(artwork)
 
 
-def _is_https_url(value: str) -> bool:
+def _is_https_url(
+    value: str,
+) -> bool:
     parsed_url = urlparse(value)
 
     return parsed_url.scheme.casefold() == "https" and parsed_url.hostname is not None
 
 
-def _trim_transparent_border(image: Image.Image) -> Image.Image:
+def _trim_transparent_border(
+    image: Image.Image,
+) -> Image.Image:
     alpha = image.getchannel("A")
     bounding_box = alpha.getbbox()
 

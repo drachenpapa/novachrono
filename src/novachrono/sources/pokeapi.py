@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from typing import Any, Final
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -45,14 +46,9 @@ def localize_raid_roster(
             except PokeApiError:
                 localized_names[boss.name] = boss.name
 
-        return RaidBoss(
+        return replace(
+            boss,
             name=localized_names[boss.name],
-            tier=boss.tier,
-            can_be_shiny=boss.can_be_shiny,
-            types=boss.types,
-            normal_combat_power=boss.normal_combat_power,
-            boosted_combat_power=boss.boosted_combat_power,
-            artwork_url=boss.artwork_url,
         )
 
     return RaidRoster(
@@ -80,7 +76,12 @@ def fetch_localized_pokemon_name(
     species_name, is_mega, mega_form = _parse_display_name(name)
     identifier = _species_identifier(species_name)
 
-    url = POKEAPI_SPECIES_URL.format(identifier=quote(identifier, safe="-"))
+    url = POKEAPI_SPECIES_URL.format(
+        identifier=quote(
+            identifier,
+            safe="-",
+        )
+    )
 
     request = Request(
         url=url,
@@ -103,6 +104,8 @@ def fetch_localized_pokemon_name(
         raise PokeApiError(f"Could not reach PokeAPI: {error.reason}") from error
     except TimeoutError as error:
         raise PokeApiError("Connection to PokeAPI timed out") from error
+    except UnicodeDecodeError as error:
+        raise PokeApiError("PokeAPI returned an invalid UTF-8 response") from error
 
     try:
         response_data = json.loads(response_body)
@@ -161,7 +164,9 @@ def _read_localized_name(
     return None
 
 
-def _parse_display_name(name: str) -> tuple[str, bool, str | None]:
+def _parse_display_name(
+    name: str,
+) -> tuple[str, bool, str | None]:
     normalized_name = name.strip()
 
     is_mega = False
@@ -176,10 +181,15 @@ def _parse_display_name(name: str) -> tuple[str, bool, str | None]:
         normalized_name = normalized_name[:-2].strip()
 
     if "(" in normalized_name:
-        normalized_name = normalized_name.split("(", maxsplit=1)[0].strip()
+        normalized_name = normalized_name.split(
+            "(",
+            maxsplit=1,
+        )[0].strip()
 
     return normalized_name, is_mega, mega_form
 
 
-def _species_identifier(name: str) -> str:
+def _species_identifier(
+    name: str,
+) -> str:
     return name.casefold().replace("'", "").replace("\u2019", "").replace(".", "").replace(" ", "-")

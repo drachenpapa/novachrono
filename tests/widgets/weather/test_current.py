@@ -79,6 +79,7 @@ def test_clear_weather_changes_between_day_and_night(
         condition=WeatherCondition.CLEAR,
         is_day=True,
     )
+
     night_weather = replace(
         day_weather,
         is_day=False,
@@ -98,6 +99,7 @@ def test_partly_cloudy_changes_between_day_and_night(
         condition=WeatherCondition.PARTLY_CLOUDY,
         is_day=True,
     )
+
     night_weather = replace(
         day_weather,
         is_day=False,
@@ -135,6 +137,7 @@ def test_celsius_and_fahrenheit_render_differently(
         weather,
         temperature_unit=TemperatureUnit.CELSIUS,
     )
+
     fahrenheit_panel = render_weather_panel(
         weather,
         temperature_unit=TemperatureUnit.FAHRENHEIT,
@@ -208,6 +211,7 @@ def test_locale_changes_weather_panel(
         weather,
         locale="de_DE",
     )
+
     english_panel = render_weather_panel(
         weather,
         locale="en_US",
