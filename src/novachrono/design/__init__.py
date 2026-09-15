@@ -2,6 +2,7 @@
 
 from novachrono.design.components import (
     create_panel,
+    draw_centered_text,
     draw_placeholder_header,
     draw_widget_header,
     find_font_that_fits,
@@ -54,6 +55,7 @@ __all__ = [
     "WEATHER_SUN_COLOR",
     "WEATHER_SUN_RAY_COLOR",
     "create_panel",
+    "draw_centered_text",
     "draw_placeholder_header",
     "draw_widget_header",
     "find_font_that_fits",

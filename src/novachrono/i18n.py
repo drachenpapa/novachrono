@@ -17,7 +17,11 @@ _TRANSLATIONS: Final = {
 }
 
 
-def translate(key: str, *, locale: str) -> str:
+def translate(
+    key: str,
+    *,
+    locale: str,
+) -> str:
     """Return a translated UI string."""
 
     translations = _TRANSLATIONS.get(locale, _TRANSLATIONS[DEFAULT_LOCALE])

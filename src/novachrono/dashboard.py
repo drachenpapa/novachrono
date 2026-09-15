@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -52,10 +52,10 @@ def render_dashboard(
     timezone: ZoneInfo = DEFAULT_TIMEZONE,
     locale: str = DEFAULT_LOCALE,
     temperature_unit: TemperatureUnit = TemperatureUnit.CELSIUS,
-) -> Sequence[Image.Image]:
+) -> tuple[Image.Image, ...]:
     """Render all Times Gate panels."""
 
-    current_time = now or datetime.now(timezone)
+    current_time = now if now is not None else datetime.now(timezone)
 
     panels = [render_panel(index) for index in range(PANEL_COUNT)]
 

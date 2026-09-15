@@ -13,7 +13,10 @@ from novachrono.sources.open_meteo import (
     fetch_current_weather,
     map_weather_code,
 )
-from novachrono.weather import CurrentWeather, WeatherCondition
+from novachrono.weather import (
+    CurrentWeather,
+    WeatherCondition,
+)
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -21,15 +24,21 @@ LATITUDE = 53.04771
 LONGITUDE = 8.80169
 
 
-def _create_response(payload: object) -> MagicMock:
+def _create_response(
+    payload: object,
+) -> MagicMock:
     return _create_raw_response(json.dumps(payload))
 
 
-def _create_raw_response(body: str) -> MagicMock:
+def _create_raw_response(
+    body: str,
+) -> MagicMock:
     return _create_bytes_response(body.encode("utf-8"))
 
 
-def _create_bytes_response(body: bytes) -> MagicMock:
+def _create_bytes_response(
+    body: bytes,
+) -> MagicMock:
     response = MagicMock()
     response.read.return_value = body
 
@@ -146,16 +155,25 @@ def test_fetch_current_weather_sends_expected_request(
     )
 
     request = mocked_urlopen.call_args.args[0]
+
     query = parse_qs(urlparse(request.full_url).query)
 
     assert request.full_url.startswith("https://api.open-meteo.com/v1/forecast?")
+
     assert query["latitude"] == ["53.04771"]
+
     assert query["longitude"] == ["8.80169"]
+
     assert query["current"] == ["temperature_2m,weather_code,is_day"]
+
     assert query["daily"] == ["temperature_2m_max,temperature_2m_min,precipitation_probability_max"]
+
     assert query["temperature_unit"] == ["celsius"]
+
     assert query["timezone"] == ["Europe/Berlin"]
+
     assert query["forecast_days"] == ["1"]
+
     assert mocked_urlopen.call_args.kwargs["timeout"] == DEFAULT_TIMEOUT_SECONDS
 
 
@@ -177,6 +195,7 @@ def test_fetch_current_weather_supports_night(
     )
 
     assert weather.condition is WeatherCondition.CLEAR
+
     assert weather.is_day is False
 
 
@@ -190,6 +209,54 @@ def test_fetch_current_weather_rejects_invalid_timeout() -> None:
             longitude=LONGITUDE,
             timezone=BERLIN,
             timeout_seconds=0,
+        )
+
+
+@patch("novachrono.sources.open_meteo.urlopen")
+def test_invalid_boolean_temperature_raises_open_meteo_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    response = _create_weather_response()
+
+    current = response["current"]
+    assert isinstance(current, dict)
+
+    current["temperature_2m"] = True
+
+    mocked_urlopen.return_value = _create_response(response)
+
+    with pytest.raises(
+        OpenMeteoError,
+        match="invalid 'temperature_2m'",
+    ):
+        fetch_current_weather(
+            latitude=LATITUDE,
+            longitude=LONGITUDE,
+            timezone=BERLIN,
+        )
+
+
+@patch("novachrono.sources.open_meteo.urlopen")
+def test_empty_daily_value_raises_open_meteo_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    response = _create_weather_response()
+
+    daily = response["daily"]
+    assert isinstance(daily, dict)
+
+    daily["temperature_2m_max"] = []
+
+    mocked_urlopen.return_value = _create_response(response)
+
+    with pytest.raises(
+        OpenMeteoError,
+        match="invalid 'temperature_2m_max'",
+    ):
+        fetch_current_weather(
+            latitude=LATITUDE,
+            longitude=LONGITUDE,
+            timezone=BERLIN,
         )
 
 
@@ -231,7 +298,11 @@ def test_timeout_raises_open_meteo_error(
 def test_http_error_uses_open_meteo_reason(
     mocked_urlopen: MagicMock,
 ) -> None:
-    error_body = json.dumps({"reason": "Invalid latitude"}).encode("utf-8")
+    error_body = json.dumps(
+        {
+            "reason": "Invalid latitude",
+        }
+    ).encode("utf-8")
 
     mocked_urlopen.side_effect = HTTPError(
         url="https://api.open-meteo.com/v1/forecast",
@@ -309,13 +380,20 @@ def test_unexpected_json_structure_raises_open_meteo_error(
         )
 
 
-@pytest.mark.parametrize("missing_section", ["current", "daily"])
+@pytest.mark.parametrize(
+    "missing_section",
+    [
+        "current",
+        "daily",
+    ],
+)
 @patch("novachrono.sources.open_meteo.urlopen")
 def test_missing_response_section_raises_open_meteo_error(
     mocked_urlopen: MagicMock,
     missing_section: str,
 ) -> None:
     response = _create_weather_response()
+
     del response[missing_section]
 
     mocked_urlopen.return_value = _create_response(response)
@@ -352,7 +430,10 @@ def test_invalid_precipitation_probability_raises_open_meteo_error(
         )
 
 
-@pytest.mark.parametrize("is_day", [-1, 2])
+@pytest.mark.parametrize(
+    "is_day",
+    [-1, 2],
+)
 @patch("novachrono.sources.open_meteo.urlopen")
 def test_invalid_is_day_raises_open_meteo_error(
     mocked_urlopen: MagicMock,

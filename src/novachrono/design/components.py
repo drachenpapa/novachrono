@@ -107,6 +107,34 @@ def draw_placeholder_header(
     )
 
 
+def draw_centered_text(
+    draw: ImageDraw.ImageDraw,
+    *,
+    y: int,
+    text: str,
+    font: BaseImageFont,
+    fill: str,
+    offset_x: int = 0,
+) -> None:
+    """Draw horizontally centered text."""
+
+    bounding_box = draw.textbbox(
+        (0, 0),
+        text,
+        font=font,
+    )
+
+    rendered_width = bounding_box[2] - bounding_box[0]
+    x = (PANEL_SIZE - rendered_width) // 2 - bounding_box[0] + offset_x
+
+    draw.text(
+        (x, y),
+        text,
+        font=font,
+        fill=fill,
+    )
+
+
 def find_font_that_fits(
     draw: ImageDraw.ImageDraw,
     *,

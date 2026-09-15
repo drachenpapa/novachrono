@@ -24,9 +24,9 @@ def create_preview(panels: Sequence[Image.Image]) -> Image.Image:
         color=BACKGROUND_COLOR,
     )
 
-    for index, panel in enumerate(panels):
-        expected_size = (PANEL_SIZE, PANEL_SIZE)
+    expected_size = (PANEL_SIZE, PANEL_SIZE)
 
+    for index, panel in enumerate(panels):
         if panel.size != expected_size:
             raise ValueError(f"Panel {index} has size {panel.size}; expected {expected_size}")
 

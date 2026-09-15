@@ -169,14 +169,14 @@ def _parse_display_name(
 ) -> tuple[str, bool, str | None]:
     normalized_name = name.strip()
 
-    is_mega = False
+    is_mega = normalized_name.casefold().startswith(("mega ", "mega-"))
+
     mega_form: str | None = None
 
-    if normalized_name.casefold().startswith(("mega ", "mega-")):
-        is_mega = True
+    if is_mega:
         normalized_name = normalized_name[5:].strip()
 
-    if is_mega and normalized_name.endswith((" X", " Y")):
+    if is_mega and normalized_name.endswith((" X", " Y", " Z")):
         mega_form = normalized_name[-1]
         normalized_name = normalized_name[:-2].strip()
 

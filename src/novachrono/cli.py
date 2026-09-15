@@ -39,10 +39,11 @@ from novachrono.sources.scraped_duck import (
     fetch_raid_roster,
 )
 from novachrono.weather import CurrentWeather, WeatherCondition
-from novachrono.widgets.clock import render_clock_panel
+from novachrono.widgets.clock import render_clock_animation
 from novachrono.widgets.pokemon_go import render_raid_animation
 from novachrono.widgets.weather import render_weather_animation
 
+CLOCK_FRAME_DURATION_MS: Final = 250
 POKEMON_GO_FRAME_DURATION_MS: Final = 10_000
 RAIN_FRAME_DURATION_MS: Final = 350
 FOG_FRAME_DURATION_MS: Final = 500
@@ -103,6 +104,7 @@ def preview(
     )
 
     dashboard_preview = create_preview(panels)
+
     save_preview(
         dashboard_preview,
         output,
@@ -134,6 +136,7 @@ def check_device(
         _exit_with_error(str(error))
 
     typer.echo("Connection successful.")
+
     typer.echo(
         json.dumps(
             response,
@@ -158,13 +161,13 @@ def send_clock(
         local_token=token,
     )
 
-    panel = render_clock_panel(datetime.now(app_config.timezone))
+    frames = render_clock_animation(datetime.now(app_config.timezone))
 
     _send_widget_frames(
         client=client,
         panel_index=CLOCK_PANEL_INDEX,
-        frames=(panel,),
-        frame_duration_ms=None,
+        frames=frames,
+        frame_duration_ms=CLOCK_FRAME_DURATION_MS,
         name="Clock",
     )
 
@@ -261,6 +264,8 @@ def send_dashboard(
         temperature_unit=app_config.temperature_unit,
     )
 
+    clock_frames = render_clock_animation(datetime.now(app_config.timezone))
+
     weather_frames = render_weather_animation(
         weather,
         locale=app_config.locale,
@@ -279,6 +284,10 @@ def send_dashboard(
             int | None,
         ],
     ] = {
+        CLOCK_PANEL_INDEX: (
+            clock_frames,
+            CLOCK_FRAME_DURATION_MS,
+        ),
         WEATHER_PANEL_INDEX: (
             weather_frames,
             _weather_frame_duration_ms(weather.condition),
@@ -317,6 +326,7 @@ def send_dashboard(
                 f"Display {display_number} failed: {error}",
                 err=True,
             )
+
             continue
 
         typer.echo(f"Display {display_number} sent successfully.")

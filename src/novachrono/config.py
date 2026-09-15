@@ -23,6 +23,13 @@ WEATHER_LONGITUDE_VARIABLE: Final = "NOVACHRONO_WEATHER_LONGITUDE"
 TIMES_GATE_HOST_VARIABLE: Final = "NOVACHRONO_TIMES_GATE_HOST"
 TIMES_GATE_TOKEN_VARIABLE: Final = "NOVACHRONO_TIMES_GATE_TOKEN"
 
+_TEMPERATURE_UNIT_ALIASES: Final = {
+    "C": TemperatureUnit.CELSIUS,
+    "CELSIUS": TemperatureUnit.CELSIUS,
+    "F": TemperatureUnit.FAHRENHEIT,
+    "FAHRENHEIT": TemperatureUnit.FAHRENHEIT,
+}
+
 
 class ConfigError(ValueError):
     """Raised when Novachrono configuration is invalid."""
@@ -125,15 +132,8 @@ def _parse_temperature_unit(value: str | None) -> TemperatureUnit:
 
     normalized_value = value.strip().upper()
 
-    aliases = {
-        "C": TemperatureUnit.CELSIUS,
-        "CELSIUS": TemperatureUnit.CELSIUS,
-        "F": TemperatureUnit.FAHRENHEIT,
-        "FAHRENHEIT": TemperatureUnit.FAHRENHEIT,
-    }
-
     try:
-        return aliases[normalized_value]
+        return _TEMPERATURE_UNIT_ALIASES[normalized_value]
     except KeyError as error:
         raise ConfigError(
             f"Unsupported temperature unit: {value}. Supported values: C, F"

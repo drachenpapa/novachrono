@@ -8,7 +8,12 @@ from PIL import Image
 from novachrono.dashboard import render_dashboard
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
 from novachrono.pokemon_go import RaidRoster
-from novachrono.preview import create_preview, save_preview
+from novachrono.preview import (
+    PREVIEW_GAP,
+    PREVIEW_MARGIN,
+    create_preview,
+    save_preview,
+)
 from novachrono.weather import CurrentWeather
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -28,12 +33,10 @@ def dashboard(
     weather: CurrentWeather,
     raid_roster: RaidRoster,
 ) -> tuple[Image.Image, ...]:
-    return tuple(
-        render_dashboard(
-            FIXED_TIME,
-            weather=weather,
-            raid_roster=raid_roster,
-        )
+    return render_dashboard(
+        FIXED_TIME,
+        weather=weather,
+        raid_roster=raid_roster,
     )
 
 
@@ -42,9 +45,15 @@ def test_create_preview_combines_all_panels(
 ) -> None:
     preview = create_preview(dashboard)
 
+    expected_width = PREVIEW_MARGIN * 2 + PANEL_COUNT * PANEL_SIZE + (PANEL_COUNT - 1) * PREVIEW_GAP
+
+    expected_height = PREVIEW_MARGIN * 2 + PANEL_SIZE
+
     assert preview.mode == "RGB"
-    assert preview.width > PANEL_COUNT * PANEL_SIZE
-    assert preview.height > PANEL_SIZE
+    assert preview.size == (
+        expected_width,
+        expected_height,
+    )
 
 
 def test_create_preview_rejects_wrong_panel_count(
@@ -63,7 +72,11 @@ def test_create_preview_rejects_wrong_panel_size(
     dashboard: tuple[Image.Image, ...],
 ) -> None:
     panels = list(dashboard)
-    panels[2] = Image.new("RGB", (64, 64))
+
+    panels[2] = Image.new(
+        "RGB",
+        (64, 64),
+    )
 
     with pytest.raises(
         ValueError,
@@ -77,9 +90,13 @@ def test_save_preview_creates_parent_directory_and_png(
     tmp_path: Path,
 ) -> None:
     preview = create_preview(dashboard)
+
     destination = tmp_path / "nested" / "dashboard-preview.png"
 
-    save_preview(preview, destination)
+    save_preview(
+        preview,
+        destination,
+    )
 
     assert destination.is_file()
 

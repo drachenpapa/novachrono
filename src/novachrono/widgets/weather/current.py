@@ -19,7 +19,6 @@ from novachrono.units import TemperatureUnit, convert_temperature
 from novachrono.weather import CurrentWeather, WeatherCondition
 from novachrono.widgets.weather.icons import (
     draw_raindrop,
-    draw_weather_icon,
     draw_weather_icon_frame,
 )
 
@@ -27,7 +26,6 @@ WEATHER_ICON_ORIGIN: Final = (16, 34)
 WEATHER_ICON_SIZE: Final = 32
 
 RAIN_ANIMATION_FRAMES: Final = (0, 1, 2)
-
 FOG_ANIMATION_FRAMES: Final = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 
@@ -43,7 +41,7 @@ def render_weather_panel(
         weather,
         locale=locale,
         temperature_unit=temperature_unit,
-        icon_frame_index=None,
+        icon_frame_index=0,
     )
 
 
@@ -55,17 +53,6 @@ def render_weather_animation(
 ) -> tuple[Image.Image, ...]:
     """Render native animation frames for the current weather."""
 
-    icon_frames = _animation_icon_frames(weather.condition)
-
-    if len(icon_frames) == 1:
-        return (
-            render_weather_panel(
-                weather,
-                locale=locale,
-                temperature_unit=temperature_unit,
-            ),
-        )
-
     return tuple(
         _render_weather_panel(
             weather,
@@ -73,7 +60,7 @@ def render_weather_animation(
             temperature_unit=temperature_unit,
             icon_frame_index=icon_frame_index,
         )
-        for icon_frame_index in icon_frames
+        for icon_frame_index in _animation_icon_frames(weather.condition)
     )
 
 
@@ -82,7 +69,7 @@ def _render_weather_panel(
     *,
     locale: str,
     temperature_unit: TemperatureUnit,
-    icon_frame_index: int | None,
+    icon_frame_index: int,
 ) -> Image.Image:
     image = create_panel()
     draw = ImageDraw.Draw(image)
@@ -121,27 +108,18 @@ def _draw_current_weather(
     weather: CurrentWeather,
     *,
     temperature_unit: TemperatureUnit,
-    icon_frame_index: int | None,
+    icon_frame_index: int,
 ) -> None:
     """Draw the main icon and current temperature."""
 
-    if icon_frame_index is None:
-        draw_weather_icon(
-            draw,
-            condition=weather.condition,
-            is_day=weather.is_day,
-            origin=WEATHER_ICON_ORIGIN,
-            size=WEATHER_ICON_SIZE,
-        )
-    else:
-        draw_weather_icon_frame(
-            draw,
-            condition=weather.condition,
-            is_day=weather.is_day,
-            origin=WEATHER_ICON_ORIGIN,
-            size=WEATHER_ICON_SIZE,
-            frame_index=icon_frame_index,
-        )
+    draw_weather_icon_frame(
+        draw,
+        condition=weather.condition,
+        is_day=weather.is_day,
+        origin=WEATHER_ICON_ORIGIN,
+        size=WEATHER_ICON_SIZE,
+        frame_index=icon_frame_index,
+    )
 
     temperature = convert_temperature(
         weather.temperature,
@@ -267,7 +245,6 @@ def _temperature_range_layout(
     """Choose the largest readable high/low-temperature layout."""
 
     spacious_text = f"{high_temperature} / {low_temperature} °{temperature_unit.value}"
-
     compact_text = f"{high_temperature}/{low_temperature}°{temperature_unit.value}"
 
     layouts = (
@@ -315,7 +292,7 @@ def _draw_precipitation_group(
     font = find_font_that_fits(
         draw,
         text=text,
-        maximum_width=(region_width - droplet_size - gap),
+        maximum_width=region_width - droplet_size - gap,
         font_sizes=(13, 12, 11, 10, 9),
     )
 
@@ -326,7 +303,6 @@ def _draw_precipitation_group(
     )
 
     total_width = droplet_size + gap + rendered_text_width
-
     start_x = left + (region_width - total_width) // 2
 
     draw_raindrop(
@@ -412,7 +388,6 @@ def _draw_centered_in_region(
     )
 
     rendered_text_width = bounding_box[2] - bounding_box[0]
-
     region_width = right - left
 
     x = left + (region_width - rendered_text_width) // 2 - bounding_box[0]

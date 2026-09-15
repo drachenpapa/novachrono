@@ -11,7 +11,9 @@ from novachrono.sources.pokeapi import (
 )
 
 
-def _create_response(localized_name: str) -> MagicMock:
+def _create_response(
+    localized_name: str,
+) -> MagicMock:
     return _create_raw_response(
         json.dumps(
             {
@@ -34,11 +36,15 @@ def _create_response(localized_name: str) -> MagicMock:
     )
 
 
-def _create_raw_response(body: str) -> MagicMock:
+def _create_raw_response(
+    body: str,
+) -> MagicMock:
     return _create_bytes_response(body.encode("utf-8"))
 
 
-def _create_bytes_response(body: bytes) -> MagicMock:
+def _create_bytes_response(
+    body: bytes,
+) -> MagicMock:
     response = MagicMock()
     response.read.return_value = body
 
@@ -104,6 +110,46 @@ def test_fetch_localized_mega_form_name(
 
 
 @patch("novachrono.sources.pokeapi.urlopen")
+def test_fetch_localized_pokemon_name_uses_original_for_unsupported_locale(
+    mocked_urlopen: MagicMock,
+) -> None:
+    name = fetch_localized_pokemon_name(
+        "Uxie",
+        locale="fr_FR",
+    )
+
+    assert name == "Uxie"
+    mocked_urlopen.assert_not_called()
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
+def test_fetch_localized_pokemon_name_uses_original_when_translation_is_missing(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_raw_response(
+        json.dumps(
+            {
+                "names": [
+                    {
+                        "language": {
+                            "name": "en",
+                        },
+                        "name": "Uxie",
+                    }
+                ]
+            }
+        )
+    )
+
+    name = fetch_localized_pokemon_name(
+        "Uxie",
+        locale="de_DE",
+    )
+
+    assert name == "Uxie"
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
 def test_localize_raid_roster_keeps_english_without_request(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -154,6 +200,32 @@ def test_localize_raid_roster_preserves_boss_data(
 
 
 @patch("novachrono.sources.pokeapi.urlopen")
+def test_localize_raid_roster_localizes_same_name_only_once(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response("Vesprit")
+
+    boss = RaidBoss(
+        name="Mesprit",
+        can_be_shiny=True,
+    )
+
+    roster = RaidRoster(
+        five_star=(boss,),
+        mega=(boss,),
+    )
+
+    localized = localize_raid_roster(
+        roster,
+        locale="de_DE",
+    )
+
+    assert localized.five_star[0].name == "Vesprit"
+    assert localized.mega[0].name == "Vesprit"
+    assert mocked_urlopen.call_count == 1
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
 def test_localize_raid_roster_falls_back_when_api_fails(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -170,6 +242,18 @@ def test_localize_raid_roster_falls_back_when_api_fails(
     )
 
     assert localized == roster
+
+
+def test_fetch_localized_pokemon_name_rejects_invalid_timeout() -> None:
+    with pytest.raises(
+        ValueError,
+        match="timeout must be greater than zero",
+    ):
+        fetch_localized_pokemon_name(
+            "Uxie",
+            locale="de_DE",
+            timeout_seconds=0,
+        )
 
 
 @patch("novachrono.sources.pokeapi.urlopen")
@@ -197,6 +281,22 @@ def test_invalid_json_raises_poke_api_error(
     with pytest.raises(
         PokeApiError,
         match="invalid JSON",
+    ):
+        fetch_localized_pokemon_name(
+            "Uxie",
+            locale="de_DE",
+        )
+
+
+@patch("novachrono.sources.pokeapi.urlopen")
+def test_unexpected_json_structure_raises_poke_api_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_raw_response(json.dumps(["unexpected"]))
+
+    with pytest.raises(
+        PokeApiError,
+        match="unexpected response",
     ):
         fetch_localized_pokemon_name(
             "Uxie",

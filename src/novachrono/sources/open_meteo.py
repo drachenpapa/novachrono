@@ -130,6 +130,7 @@ def _parse_weather_response(
         response_data,
         "current",
     )
+
     daily = _read_mapping(
         response_data,
         "daily",

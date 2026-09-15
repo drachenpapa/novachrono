@@ -2,7 +2,7 @@ import base64
 import io
 import json
 from unittest.mock import MagicMock, patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 from PIL import Image
@@ -132,6 +132,7 @@ def test_config_rejects_invalid_timeout() -> None:
 
 def test_encode_image_returns_base64_jpeg() -> None:
     encoded_image = encode_image(_create_panel())
+
     decoded_image = base64.b64decode(encoded_image)
 
     with Image.open(io.BytesIO(decoded_image)) as image:
@@ -317,7 +318,10 @@ def test_send_image_targets_selected_panel(
     assert payload["PicWidth"] == PANEL_SIZE
     assert payload["PicOffset"] == 0
     assert payload["PicSpeed"] == 1000
-    assert isinstance(payload["PicData"], str)
+    assert isinstance(
+        payload["PicData"],
+        str,
+    )
 
 
 @patch("novachrono.outputs.times_gate.urlopen")
@@ -366,7 +370,10 @@ def test_send_animation_sends_native_multi_frame_payload(
         assert payload["PicWidth"] == PANEL_SIZE
         assert payload["PicOffset"] == frame_index
         assert payload["PicSpeed"] == 10_000
-        assert isinstance(payload["PicData"], str)
+        assert isinstance(
+            payload["PicData"],
+            str,
+        )
 
 
 @patch("novachrono.outputs.times_gate.urlopen")
@@ -444,6 +451,25 @@ def test_api_error_raises_times_gate_error(
 
 
 @patch("novachrono.outputs.times_gate.urlopen")
+def test_http_error_raises_times_gate_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.side_effect = HTTPError(
+        url=API_URL,
+        code=401,
+        msg="Unauthorized",
+        hdrs=None,
+        fp=None,
+    )
+
+    with pytest.raises(
+        TimesGateError,
+        match="HTTP 401",
+    ):
+        _create_client().get_configuration()
+
+
+@patch("novachrono.outputs.times_gate.urlopen")
 def test_connection_error_raises_times_gate_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -452,6 +478,19 @@ def test_connection_error_raises_times_gate_error(
     with pytest.raises(
         TimesGateError,
         match="Could not reach Times Gate",
+    ):
+        _create_client().get_configuration()
+
+
+@patch("novachrono.outputs.times_gate.urlopen")
+def test_timeout_raises_times_gate_error(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.side_effect = TimeoutError()
+
+    with pytest.raises(
+        TimesGateError,
+        match="timed out",
     ):
         _create_client().get_configuration()
 

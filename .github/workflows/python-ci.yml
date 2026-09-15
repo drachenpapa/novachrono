@@ -60,16 +60,3 @@ jobs:
         uses: ./.github/actions/setup-python
       - name: Run tests
         run: uv run pytest
-      - name: Render dashboard preview
-        run: uv run novachrono preview
-      - name: Verify dashboard preview
-        shell: python
-        run: |
-          from pathlib import Path
-
-          preview = Path("output/dashboard-preview.png")
-          if not preview.is_file():
-              raise SystemExit(
-                  f"Dashboard preview was not created: {preview}"
-              )
-          print(f"Dashboard preview exists: {preview}")

@@ -10,7 +10,6 @@ SCRAPED_DUCK_RAIDS_URL: Final = (
     "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.min.json"
 )
 DEFAULT_TIMEOUT_SECONDS: Final = 8.0
-
 SHADOW_RAID_PREFIX: Final = "shadow "
 
 

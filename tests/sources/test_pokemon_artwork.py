@@ -165,7 +165,9 @@ def test_fetch_raid_artwork_rejects_invalid_timeout() -> None:
         )
 
 
-def _create_response(data: bytes) -> MagicMock:
+def _create_response(
+    data: bytes,
+) -> MagicMock:
     response = MagicMock()
     response.read.return_value = data
 
@@ -191,7 +193,10 @@ def _create_artwork_bytes() -> bytes:
             )
 
     buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
+    image.save(
+        buffer,
+        format="PNG",
+    )
 
     return buffer.getvalue()
 

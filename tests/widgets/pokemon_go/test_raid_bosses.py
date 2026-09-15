@@ -13,7 +13,10 @@ from novachrono.widgets.pokemon_go import (
 def test_render_raid_panel_has_expected_size_and_mode() -> None:
     panel = render_raid_panel(_create_roster())
 
-    assert panel.size == (PANEL_SIZE, PANEL_SIZE)
+    assert panel.size == (
+        PANEL_SIZE,
+        PANEL_SIZE,
+    )
     assert panel.mode == "RGB"
 
 
@@ -34,7 +37,10 @@ def test_render_raid_panel_supports_empty_roster() -> None:
         )
     )
 
-    assert panel.size == (PANEL_SIZE, PANEL_SIZE)
+    assert panel.size == (
+        PANEL_SIZE,
+        PANEL_SIZE,
+    )
 
 
 def test_render_raid_panel_uses_provided_artwork() -> None:
@@ -52,18 +58,21 @@ def test_render_raid_panel_uses_provided_artwork() -> None:
 
     artwork = Image.new(
         mode="RGB",
-        size=(4, 4),
+        size=(44, 44),
         color=(255, 0, 255),
     )
 
-    panel = render_raid_panel(
+    panel_with_artwork = render_raid_panel(
         roster,
         artwork_by_url={
             artwork_url: artwork,
         },
     )
 
-    assert panel.getpixel((20, 37)) == (255, 0, 255)
+    panel_without_artwork = render_raid_panel(roster)
+
+    assert panel_with_artwork.tobytes() != panel_without_artwork.tobytes()
+    assert (255, 0, 255) in set(panel_with_artwork.get_flattened_data())
 
 
 def test_render_raid_animation_returns_single_frame_for_single_bosses() -> None:
@@ -114,7 +123,16 @@ def test_render_raid_animation_rotates_all_bosses() -> None:
     )
 
     with patch("novachrono.widgets.pokemon_go.raid_bosses.render_raid_panel") as mocked_render:
-        mocked_render.side_effect = (Image.new("RGB", (PANEL_SIZE, PANEL_SIZE)) for _ in range(3))
+        mocked_render.side_effect = (
+            Image.new(
+                "RGB",
+                (
+                    PANEL_SIZE,
+                    PANEL_SIZE,
+                ),
+            )
+            for _ in range(3)
+        )
 
         frames = render_raid_animation(roster)
 
@@ -154,7 +172,16 @@ def test_render_raid_animation_preserves_empty_tier() -> None:
     )
 
     with patch("novachrono.widgets.pokemon_go.raid_bosses.render_raid_panel") as mocked_render:
-        mocked_render.side_effect = (Image.new("RGB", (PANEL_SIZE, PANEL_SIZE)) for _ in range(2))
+        mocked_render.side_effect = (
+            Image.new(
+                "RGB",
+                (
+                    PANEL_SIZE,
+                    PANEL_SIZE,
+                ),
+            )
+            for _ in range(2)
+        )
 
         render_raid_animation(roster)
 

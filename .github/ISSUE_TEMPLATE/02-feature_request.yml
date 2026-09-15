@@ -2,64 +2,61 @@ name: Feature request
 description: Suggest an improvement or new capability for Novachrono
 title: "[FEAT] "
 labels:
-
-* enhancement
-  assignees:
-* drachenpapa
+  - enhancement
+assignees:
+  - drachenpapa
 
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement.
 
-* type: markdown
-  attributes:
-  value: |
-  Thanks for suggesting an improvement.
+        Please describe the concrete use case before proposing a technical solution.
 
-  ```
-  Please describe the concrete use case before proposing a technical solution.
-  ```
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem would this feature solve?
+      placeholder: "When using Novachrono, I would like to..."
+    validations:
+      required: true
 
-* type: textarea
-  id: problem
-  attributes:
-  label: Problem or use case
-  description: What problem would this feature solve?
-  placeholder: "When using Novachrono, I would like to..."
-  validations:
-  required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - New widget
+        - Widget rendering
+        - Visual design
+        - Data source
+        - Times Gate communication
+        - Configuration
+        - Scheduling
+        - Installation or deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
 
-* type: dropdown
-  id: area
-  attributes:
-  label: Affected area
-  options:
-  - Widget rendering
-  - Visual design
-  - Data source
-  - Times Gate communication
-  - Configuration
-  - Scheduling
-  - Installation or deployment
-  - Documentation
-  - Other
-  validations:
-  required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behavior
+      description: Describe what you would like Novachrono to do.
+    validations:
+      required: true
 
-* type: textarea
-  id: solution
-  attributes:
-  label: Proposed behavior
-  description: Describe what you would like Novachrono to do.
-  validations:
-  required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any workarounds or alternative solutions you considered.
 
-* type: textarea
-  id: alternatives
-  attributes:
-  label: Alternatives considered
-  description: Describe any workarounds or alternative solutions you considered.
-
-* type: textarea
-  id: additional
-  attributes:
-  label: Additional context
-  description: Add mockups, examples, links, or other useful context.
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add mockups, examples, links, or other useful context.

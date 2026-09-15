@@ -6,6 +6,7 @@ from novachrono.design import (
     FRAME_ACCENT_COLOR,
     FRAME_BRIGHT_COLOR,
     FRAME_DIM_COLOR,
+    PANEL_COLOR,
     WEATHER_CLOUD_COLOR,
     WEATHER_CLOUD_SHADOW_COLOR,
     WEATHER_RAIN_COLOR,
@@ -32,26 +33,6 @@ RAIN_FRAME_Y_OFFSETS: Final = (
     (2, 4, 0),
     (4, 0, 2),
 )
-
-
-def draw_weather_icon(
-    draw: ImageDraw.ImageDraw,
-    *,
-    condition: WeatherCondition,
-    is_day: bool,
-    origin: tuple[int, int],
-    size: int,
-) -> None:
-    """Draw the static weather icon."""
-
-    draw_weather_icon_frame(
-        draw,
-        condition=condition,
-        is_day=is_day,
-        origin=origin,
-        size=size,
-        frame_index=0,
-    )
 
 
 def draw_weather_icon_frame(
@@ -86,14 +67,12 @@ def draw_weather_icon_frame(
             _draw_cloud_icon(
                 draw,
                 origin=origin,
-                size=size,
             )
 
         case WeatherCondition.FOG:
             _draw_fog_icon(
                 draw,
                 origin=origin,
-                size=size,
                 frame_index=frame_index,
             )
 
@@ -101,7 +80,6 @@ def draw_weather_icon_frame(
             _draw_rain_icon(
                 draw,
                 origin=origin,
-                size=size,
                 frame_index=frame_index,
             )
 
@@ -116,7 +94,6 @@ def draw_weather_icon_frame(
             _draw_thunderstorm_icon(
                 draw,
                 origin=origin,
-                size=size,
             )
 
 
@@ -203,7 +180,6 @@ def _draw_partly_cloudy_icon(
     _draw_cloud(
         draw,
         origin=(origin[0] + 5, origin[1] + 10),
-        size=size - 6,
     )
 
 
@@ -211,12 +187,10 @@ def _draw_cloud_icon(
     draw: ImageDraw.ImageDraw,
     *,
     origin: tuple[int, int],
-    size: int,
 ) -> None:
     _draw_cloud(
         draw,
         origin=(origin[0] + 2, origin[1] + 7),
-        size=size - 4,
     )
 
 
@@ -224,13 +198,11 @@ def _draw_rain_icon(
     draw: ImageDraw.ImageDraw,
     *,
     origin: tuple[int, int],
-    size: int,
     frame_index: int,
 ) -> None:
     _draw_cloud(
         draw,
         origin=(origin[0] + 2, origin[1] + 6),
-        size=size - 4,
     )
 
     drop_offsets = RAIN_FRAME_Y_OFFSETS[frame_index % len(RAIN_FRAME_Y_OFFSETS)]
@@ -318,12 +290,10 @@ def _draw_thunderstorm_icon(
     draw: ImageDraw.ImageDraw,
     *,
     origin: tuple[int, int],
-    size: int,
 ) -> None:
     _draw_cloud(
         draw,
         origin=(origin[0] + 2, origin[1] + 6),
-        size=size - 4,
     )
 
     bolt_points = (
@@ -366,7 +336,6 @@ def _draw_fog_icon(
     draw: ImageDraw.ImageDraw,
     *,
     origin: tuple[int, int],
-    size: int,
     frame_index: int,
 ) -> None:
     offsets = FOG_FRAME_OFFSETS[frame_index % len(FOG_FRAME_OFFSETS)]
@@ -457,13 +426,14 @@ def _draw_moon(
             center_x + radius + 5,
             center_y + radius,
         ),
-        fill="#020B14",
+        fill=PANEL_COLOR,
     )
 
     draw.point(
         (center_x + 8, center_y - 7),
         fill=FRAME_BRIGHT_COLOR,
     )
+
     draw.point(
         (center_x + 11, center_y - 4),
         fill=FRAME_BRIGHT_COLOR,
@@ -474,11 +444,8 @@ def _draw_cloud(
     draw: ImageDraw.ImageDraw,
     *,
     origin: tuple[int, int],
-    size: int,
 ) -> None:
-    left = origin[0]
-    top = origin[1]
-
+    left, top = origin
     shadow_offset = 1
 
     draw.ellipse(
@@ -490,6 +457,7 @@ def _draw_cloud(
         ),
         fill=WEATHER_CLOUD_SHADOW_COLOR,
     )
+
     draw.ellipse(
         (
             left + 10 + shadow_offset,
@@ -499,6 +467,7 @@ def _draw_cloud(
         ),
         fill=WEATHER_CLOUD_SHADOW_COLOR,
     )
+
     draw.ellipse(
         (
             left + 18 + shadow_offset,
@@ -508,6 +477,7 @@ def _draw_cloud(
         ),
         fill=WEATHER_CLOUD_SHADOW_COLOR,
     )
+
     draw.rectangle(
         (
             left + 4 + shadow_offset,
@@ -527,6 +497,7 @@ def _draw_cloud(
         ),
         fill=WEATHER_CLOUD_COLOR,
     )
+
     draw.ellipse(
         (
             left + 10,
@@ -536,6 +507,7 @@ def _draw_cloud(
         ),
         fill=WEATHER_CLOUD_COLOR,
     )
+
     draw.ellipse(
         (
             left + 18,
@@ -545,6 +517,7 @@ def _draw_cloud(
         ),
         fill=WEATHER_CLOUD_COLOR,
     )
+
     draw.rectangle(
         (
             left + 4,

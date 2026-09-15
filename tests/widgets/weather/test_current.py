@@ -5,7 +5,10 @@ from PIL import Image
 
 from novachrono.design import PANEL_SIZE
 from novachrono.units import TemperatureUnit
-from novachrono.weather import CurrentWeather, WeatherCondition
+from novachrono.weather import (
+    CurrentWeather,
+    WeatherCondition,
+)
 from novachrono.widgets.weather import (
     render_weather_animation,
     render_weather_panel,
@@ -17,11 +20,16 @@ def test_render_weather_panel_has_expected_size_and_mode(
 ) -> None:
     panel = render_weather_panel(weather)
 
-    assert isinstance(panel, Image.Image)
+    assert isinstance(
+        panel,
+        Image.Image,
+    )
+
     assert panel.size == (
         PANEL_SIZE,
         PANEL_SIZE,
     )
+
     assert panel.mode == "RGB"
 
 
@@ -29,6 +37,7 @@ def test_render_weather_panel_is_deterministic(
     weather: CurrentWeather,
 ) -> None:
     first_panel = render_weather_panel(weather)
+
     second_panel = render_weather_panel(weather)
 
     assert first_panel.tobytes() == second_panel.tobytes()
@@ -45,6 +54,7 @@ def test_render_weather_panel_changes_with_temperature(
     )
 
     original_panel = render_weather_panel(weather)
+
     warmer_panel = render_weather_panel(warmer_weather)
 
     assert original_panel.tobytes() != warmer_panel.tobytes()
@@ -71,63 +81,33 @@ def test_render_weather_panel_supports_each_condition(
     )
 
 
-def test_clear_weather_changes_between_day_and_night(
-    weather: CurrentWeather,
-) -> None:
-    day_weather = replace(
-        weather,
-        condition=WeatherCondition.CLEAR,
-        is_day=True,
-    )
-
-    night_weather = replace(
-        day_weather,
-        is_day=False,
-    )
-
-    day_panel = render_weather_panel(day_weather)
-    night_panel = render_weather_panel(night_weather)
-
-    assert day_panel.tobytes() != night_panel.tobytes()
-
-
-def test_partly_cloudy_changes_between_day_and_night(
-    weather: CurrentWeather,
-) -> None:
-    day_weather = replace(
-        weather,
-        condition=WeatherCondition.PARTLY_CLOUDY,
-        is_day=True,
-    )
-
-    night_weather = replace(
-        day_weather,
-        is_day=False,
-    )
-
-    day_panel = render_weather_panel(day_weather)
-    night_panel = render_weather_panel(night_weather)
-
-    assert day_panel.tobytes() != night_panel.tobytes()
-
-
 @pytest.mark.parametrize(
-    "temperature_unit",
-    list(TemperatureUnit),
+    "condition",
+    [
+        WeatherCondition.CLEAR,
+        WeatherCondition.PARTLY_CLOUDY,
+    ],
 )
-def test_render_weather_panel_supports_each_temperature_unit(
+def test_day_and_night_render_differently(
     weather: CurrentWeather,
-    temperature_unit: TemperatureUnit,
+    condition: WeatherCondition,
 ) -> None:
-    panel = render_weather_panel(
+    day_weather = replace(
         weather,
-        temperature_unit=temperature_unit,
+        condition=condition,
+        is_day=True,
     )
 
-    assert panel.size == (
-        PANEL_SIZE,
-        PANEL_SIZE,
+    night_weather = replace(
+        day_weather,
+        is_day=False,
     )
+
+    day_panel = render_weather_panel(day_weather)
+
+    night_panel = render_weather_panel(night_weather)
+
+    assert day_panel.tobytes() != night_panel.tobytes()
 
 
 def test_celsius_and_fahrenheit_render_differently(
@@ -146,40 +126,45 @@ def test_celsius_and_fahrenheit_render_differently(
     assert celsius_panel.tobytes() != fahrenheit_panel.tobytes()
 
 
-def test_render_weather_panel_supports_negative_temperatures(
+@pytest.mark.parametrize(
+    (
+        "temperature",
+        "high_temperature",
+        "low_temperature",
+        "temperature_unit",
+    ),
+    [
+        (
+            -20,
+            -15,
+            -25,
+            TemperatureUnit.CELSIUS,
+        ),
+        (
+            40,
+            45,
+            35,
+            TemperatureUnit.FAHRENHEIT,
+        ),
+    ],
+)
+def test_render_weather_panel_supports_extreme_temperature_layouts(
     weather: CurrentWeather,
+    temperature: int,
+    high_temperature: int,
+    low_temperature: int,
+    temperature_unit: TemperatureUnit,
 ) -> None:
-    freezing_weather = replace(
+    extreme_weather = replace(
         weather,
-        temperature=-20,
-        high_temperature=-15,
-        low_temperature=-25,
+        temperature=temperature,
+        high_temperature=high_temperature,
+        low_temperature=low_temperature,
     )
 
     panel = render_weather_panel(
-        freezing_weather,
-        temperature_unit=TemperatureUnit.CELSIUS,
-    )
-
-    assert panel.size == (
-        PANEL_SIZE,
-        PANEL_SIZE,
-    )
-
-
-def test_render_weather_panel_supports_three_digit_fahrenheit(
-    weather: CurrentWeather,
-) -> None:
-    hot_weather = replace(
-        weather,
-        temperature=40,
-        high_temperature=45,
-        low_temperature=35,
-    )
-
-    panel = render_weather_panel(
-        hot_weather,
-        temperature_unit=TemperatureUnit.FAHRENHEIT,
+        extreme_weather,
+        temperature_unit=temperature_unit,
     )
 
     assert panel.size == (
@@ -273,6 +258,26 @@ def test_render_weather_animation_uses_expected_frame_count(
 
 @pytest.mark.parametrize(
     "condition",
+    list(WeatherCondition),
+)
+def test_weather_panel_matches_first_animation_frame(
+    weather: CurrentWeather,
+    condition: WeatherCondition,
+) -> None:
+    selected_weather = replace(
+        weather,
+        condition=condition,
+    )
+
+    panel = render_weather_panel(selected_weather)
+
+    frames = render_weather_animation(selected_weather)
+
+    assert frames[0].tobytes() == panel.tobytes()
+
+
+@pytest.mark.parametrize(
+    "condition",
     [
         WeatherCondition.RAIN,
         WeatherCondition.FOG,
@@ -326,18 +331,3 @@ def test_fog_animation_contains_multiple_rolling_states(
 
     assert len(frames) == 10
     assert len(rendered_frames) >= 6
-
-
-def test_thunderstorm_remains_static(
-    weather: CurrentWeather,
-) -> None:
-    thunderstorm = replace(
-        weather,
-        condition=WeatherCondition.THUNDERSTORM,
-    )
-
-    static_panel = render_weather_panel(thunderstorm)
-    frames = render_weather_animation(thunderstorm)
-
-    assert len(frames) == 1
-    assert frames[0].tobytes() == static_panel.tobytes()

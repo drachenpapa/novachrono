@@ -143,7 +143,6 @@ class TimesGateClient:
         )
 
         lcd_array = _create_lcd_array(panel_index)
-
         picture_id = self._new_picture_id()
 
         responses: list[dict[str, Any]] = []

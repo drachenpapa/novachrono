@@ -30,7 +30,9 @@ runner = CliRunner()
 
 
 @pytest.fixture
-def multi_raid_roster(raid_roster: RaidRoster) -> RaidRoster:
+def multi_raid_roster(
+    raid_roster: RaidRoster,
+) -> RaidRoster:
     """Two five-star bosses to trigger animation rendering."""
 
     second_five_star = RaidBoss(
@@ -236,7 +238,7 @@ def test_check_device_reports_missing_configuration(
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.TimesGateClient")
 @patch("novachrono.cli.load_config")
-def test_send_clock_fetches_no_external_data(
+def test_send_clock_uses_native_animation_without_external_data(
     mocked_load_config: MagicMock,
     mocked_client_class: MagicMock,
     mocked_load_weather: MagicMock,
@@ -248,9 +250,7 @@ def test_send_clock_fetches_no_external_data(
     )
 
     mocked_client = mocked_client_class.return_value
-    mocked_client.send_image.return_value = {
-        "ReturnCode": 0,
-    }
+    mocked_client.send_animation.return_value = tuple({"ReturnCode": 0} for _ in range(26))
 
     result = runner.invoke(
         app,
@@ -262,7 +262,40 @@ def test_send_clock_fetches_no_external_data(
     mocked_load_weather.assert_not_called()
     mocked_load_raids.assert_not_called()
 
-    assert mocked_client.send_image.call_args.kwargs["panel_index"] == CLOCK_PANEL_INDEX
+    mocked_client.send_image.assert_not_called()
+    mocked_client.send_animation.assert_called_once()
+
+    arguments = mocked_client.send_animation.call_args.kwargs
+
+    assert arguments["panel_index"] == CLOCK_PANEL_INDEX
+    assert len(arguments["images"]) == 26
+    assert arguments["frame_duration_ms"] == 250
+
+    assert "26 frame(s)" in result.stdout
+
+
+@patch("novachrono.cli.TimesGateClient")
+@patch("novachrono.cli.load_config")
+def test_send_weather_reports_missing_weather_configuration(
+    mocked_load_config: MagicMock,
+    mocked_client_class: MagicMock,
+) -> None:
+    mocked_load_config.return_value = _create_app_config(
+        weather_latitude=None,
+        weather_longitude=None,
+    )
+
+    result = runner.invoke(
+        app,
+        ["send-weather"],
+    )
+
+    assert result.exit_code == 1
+    assert "NOVACHRONO_WEATHER_LATITUDE" in result.stderr
+    assert "NOVACHRONO_WEATHER_LONGITUDE" in result.stderr
+
+    mocked_client_class.return_value.send_image.assert_not_called()
+    mocked_client_class.return_value.send_animation.assert_not_called()
 
 
 @patch("novachrono.cli._load_raid_roster")
@@ -371,6 +404,7 @@ def test_send_pokemon_uses_static_image_for_single_frame(
         weather_latitude=None,
         weather_longitude=None,
     )
+
     mocked_load_raids.return_value = raid_roster
     mocked_fetch_artwork.return_value = {}
 
@@ -410,6 +444,7 @@ def test_send_pokemon_uses_animation_for_multiple_bosses(
         weather_latitude=None,
         weather_longitude=None,
     )
+
     mocked_load_raids.return_value = multi_raid_roster
     mocked_fetch_artwork.return_value = {}
 
@@ -508,7 +543,7 @@ def test_send_weather_reports_times_gate_error(
 @patch("novachrono.cli._load_current_weather")
 @patch("novachrono.cli.TimesGateClient")
 @patch("novachrono.cli.load_config")
-def test_send_dashboard_uses_static_images_for_single_pokemon_frame(
+def test_send_dashboard_uses_clock_animation_and_static_other_panels(
     mocked_load_config: MagicMock,
     mocked_client_class: MagicMock,
     mocked_load_weather: MagicMock,
@@ -524,6 +559,7 @@ def test_send_dashboard_uses_static_images_for_single_pokemon_frame(
 
     mocked_client = mocked_client_class.return_value
     mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
+
     mocked_client.send_image.return_value = {
         "ReturnCode": 0,
     }
@@ -534,12 +570,28 @@ def test_send_dashboard_uses_static_images_for_single_pokemon_frame(
     )
 
     assert result.exit_code == 0
-    assert mocked_client.send_image.call_count == PANEL_COUNT
-    mocked_client.send_animation.assert_not_called()
 
-    panel_indices = [call.kwargs["panel_index"] for call in mocked_client.send_image.call_args_list]
+    assert mocked_client.send_image.call_count == 4
+    assert mocked_client.send_animation.call_count == 1
 
-    assert panel_indices == list(range(PANEL_COUNT))
+    static_panel_indices = [
+        call.kwargs["panel_index"] for call in mocked_client.send_image.call_args_list
+    ]
+
+    assert static_panel_indices == [
+        0,
+        WEATHER_PANEL_INDEX,
+        POKEMON_GO_PANEL_INDEX,
+        4,
+    ]
+
+    clock_arguments = _animation_arguments_for_panel(
+        mocked_client,
+        CLOCK_PANEL_INDEX,
+    )
+
+    assert len(clock_arguments["images"]) == 26
+    assert clock_arguments["frame_duration_ms"] == 250
 
 
 @patch("novachrono.cli.fetch_raid_artwork")
@@ -563,13 +615,10 @@ def test_send_dashboard_uses_animation_for_pokemon_display(
 
     mocked_client = mocked_client_class.return_value
     mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
+
     mocked_client.send_image.return_value = {
         "ReturnCode": 0,
     }
-    mocked_client.send_animation.return_value = (
-        {"ReturnCode": 0},
-        {"ReturnCode": 0},
-    )
 
     result = runner.invoke(
         app,
@@ -578,14 +627,24 @@ def test_send_dashboard_uses_animation_for_pokemon_display(
 
     assert result.exit_code == 0
 
-    assert mocked_client.send_image.call_count == PANEL_COUNT - 1
-    mocked_client.send_animation.assert_called_once()
+    assert mocked_client.send_image.call_count == 3
+    assert mocked_client.send_animation.call_count == 2
 
-    arguments = mocked_client.send_animation.call_args.kwargs
+    pokemon_arguments = _animation_arguments_for_panel(
+        mocked_client,
+        POKEMON_GO_PANEL_INDEX,
+    )
 
-    assert arguments["panel_index"] == POKEMON_GO_PANEL_INDEX
-    assert len(arguments["images"]) == 2
-    assert arguments["frame_duration_ms"] == 10_000
+    assert len(pokemon_arguments["images"]) == 2
+    assert pokemon_arguments["frame_duration_ms"] == 10_000
+
+    clock_arguments = _animation_arguments_for_panel(
+        mocked_client,
+        CLOCK_PANEL_INDEX,
+    )
+
+    assert len(clock_arguments["images"]) == 26
+    assert clock_arguments["frame_duration_ms"] == 250
 
 
 @patch("novachrono.cli.fetch_raid_artwork")
@@ -614,14 +673,10 @@ def test_send_dashboard_uses_animation_for_weather_display(
 
     mocked_client = mocked_client_class.return_value
     mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
+
     mocked_client.send_image.return_value = {
         "ReturnCode": 0,
     }
-    mocked_client.send_animation.return_value = (
-        {"ReturnCode": 0},
-        {"ReturnCode": 0},
-        {"ReturnCode": 0},
-    )
 
     result = runner.invoke(
         app,
@@ -630,14 +685,78 @@ def test_send_dashboard_uses_animation_for_weather_display(
 
     assert result.exit_code == 0
 
-    assert mocked_client.send_image.call_count == PANEL_COUNT - 1
-    mocked_client.send_animation.assert_called_once()
+    assert mocked_client.send_image.call_count == 3
+    assert mocked_client.send_animation.call_count == 2
 
-    arguments = mocked_client.send_animation.call_args.kwargs
+    weather_arguments = _animation_arguments_for_panel(
+        mocked_client,
+        WEATHER_PANEL_INDEX,
+    )
 
-    assert arguments["panel_index"] == WEATHER_PANEL_INDEX
-    assert len(arguments["images"]) == 3
-    assert arguments["frame_duration_ms"] == 350
+    assert len(weather_arguments["images"]) == 3
+    assert weather_arguments["frame_duration_ms"] == 350
+
+    clock_arguments = _animation_arguments_for_panel(
+        mocked_client,
+        CLOCK_PANEL_INDEX,
+    )
+
+    assert len(clock_arguments["images"]) == 26
+    assert clock_arguments["frame_duration_ms"] == 250
+
+
+@patch("novachrono.cli.fetch_raid_artwork")
+@patch("novachrono.cli._load_raid_roster")
+@patch("novachrono.cli._load_current_weather")
+@patch("novachrono.cli.TimesGateClient")
+@patch("novachrono.cli.load_config")
+def test_send_dashboard_continues_after_display_failure(
+    mocked_load_config: MagicMock,
+    mocked_client_class: MagicMock,
+    mocked_load_weather: MagicMock,
+    mocked_load_raids: MagicMock,
+    mocked_fetch_artwork: MagicMock,
+    weather: CurrentWeather,
+    raid_roster: RaidRoster,
+) -> None:
+    mocked_load_config.return_value = _create_app_config()
+    mocked_load_weather.return_value = weather
+    mocked_load_raids.return_value = raid_roster
+    mocked_fetch_artwork.return_value = {}
+
+    mocked_client = mocked_client_class.return_value
+    mocked_client.config.api_url = "http://192.168.178.50:9000/divoom_api"
+
+    mocked_client.send_image.side_effect = [
+        TimesGateError("Display unavailable"),
+        {"ReturnCode": 0},
+        {"ReturnCode": 0},
+        {"ReturnCode": 0},
+    ]
+
+    result = runner.invoke(
+        app,
+        ["send-dashboard"],
+    )
+
+    assert result.exit_code == 1
+
+    assert mocked_client.send_image.call_count == 4
+    assert mocked_client.send_animation.call_count == 1
+
+    assert "Display 1 failed" in result.stderr
+    assert "Dashboard delivery failed for display(s): 1" in result.stderr
+
+
+def _animation_arguments_for_panel(
+    client: MagicMock,
+    panel_index: int,
+) -> dict[str, object]:
+    for call in client.send_animation.call_args_list:
+        if call.kwargs["panel_index"] == panel_index:
+            return call.kwargs
+
+    raise AssertionError(f"No animation sent to panel {panel_index}")
 
 
 def _create_app_config(

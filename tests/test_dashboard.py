@@ -35,47 +35,34 @@ def test_current_widgets_have_expected_positions() -> None:
     assert POKEMON_GO_PANEL_INDEX == 3
 
 
-def test_render_dashboard_creates_expected_number_of_panels(
+def test_render_dashboard_returns_expected_panels(
     weather: CurrentWeather,
     raid_roster: RaidRoster,
 ) -> None:
     panels = render_dashboard(
+        FIXED_TIME,
         weather=weather,
         raid_roster=raid_roster,
     )
 
+    assert isinstance(panels, tuple)
     assert len(panels) == PANEL_COUNT
 
-
-def test_render_dashboard_returns_images(
-    weather: CurrentWeather,
-    raid_roster: RaidRoster,
-) -> None:
-    panels = render_dashboard(
-        weather=weather,
-        raid_roster=raid_roster,
-    )
-
-    assert all(isinstance(panel, Image.Image) for panel in panels)
-
-
-def test_each_panel_has_expected_size_and_mode(
-    weather: CurrentWeather,
-    raid_roster: RaidRoster,
-) -> None:
-    panels = render_dashboard(
-        weather=weather,
-        raid_roster=raid_roster,
-    )
-
     for panel in panels:
-        assert panel.size == (PANEL_SIZE, PANEL_SIZE)
+        assert isinstance(panel, Image.Image)
+        assert panel.size == (
+            PANEL_SIZE,
+            PANEL_SIZE,
+        )
         assert panel.mode == "RGB"
 
 
 @pytest.mark.parametrize(
     "index",
-    [-1, PANEL_COUNT],
+    [
+        -1,
+        PANEL_COUNT,
+    ],
 )
 def test_render_panel_rejects_invalid_index(
     index: int,
@@ -87,21 +74,18 @@ def test_render_panel_rejects_invalid_index(
         render_panel(index)
 
 
-def test_dashboard_renders_weather_on_configured_panel(
+@pytest.mark.parametrize(
+    "panel_index",
+    [
+        WEATHER_PANEL_INDEX,
+        CLOCK_PANEL_INDEX,
+        POKEMON_GO_PANEL_INDEX,
+    ],
+)
+def test_dashboard_renders_widgets_on_configured_panels(
     weather: CurrentWeather,
     raid_roster: RaidRoster,
-) -> None:
-    panels = render_dashboard(
-        weather=weather,
-        raid_roster=raid_roster,
-    )
-
-    assert panels[WEATHER_PANEL_INDEX].tobytes() != panels[0].tobytes()
-
-
-def test_dashboard_renders_clock_on_center_panel(
-    weather: CurrentWeather,
-    raid_roster: RaidRoster,
+    panel_index: int,
 ) -> None:
     panels = render_dashboard(
         FIXED_TIME,
@@ -109,19 +93,7 @@ def test_dashboard_renders_clock_on_center_panel(
         raid_roster=raid_roster,
     )
 
-    assert panels[CLOCK_PANEL_INDEX].tobytes() != panels[0].tobytes()
-
-
-def test_dashboard_renders_pokemon_go_on_configured_panel(
-    weather: CurrentWeather,
-    raid_roster: RaidRoster,
-) -> None:
-    panels = render_dashboard(
-        weather=weather,
-        raid_roster=raid_roster,
-    )
-
-    assert panels[POKEMON_GO_PANEL_INDEX].tobytes() != panels[0].tobytes()
+    assert panels[panel_index].tobytes() != panels[0].tobytes()
 
 
 def test_dashboard_passes_artwork_to_pokemon_renderer(

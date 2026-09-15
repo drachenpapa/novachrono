@@ -2,7 +2,7 @@
 
 Novachrono is a self-hosted dashboard renderer for the [Divoom Times Gate](https://divoom.com/).
 
-It renders a consistent five-screen dashboard, generates local previews, and sends individual or complete dashboard panels to a Times Gate through its local network API.
+It renders a consistent five-screen dashboard, generates local previews, and sends static or animated widgets to a Times Gate through its local network API.
 
 > Novachrono is currently in an early development stage. Features, configuration, and architecture may change before the first stable release.
 
@@ -13,12 +13,16 @@ The following functionality is currently available:
 - rendering of five 128 × 128 pixel panels
 - shared custom HUD-style visual design
 - current weather widget using live Open-Meteo data
+- animated rain and fog weather states
 - Celsius and Fahrenheit display support
 - German and English UI localization
-- clock and date widget
-- Pokémon GO raid boss widget using live ScrapedDuck and PokéAPI data
+- animated clock and date widget
+- Pokémon GO raid boss widget using live ScrapedDuck data
+- Pokémon name localization through PokeAPI
+- rotating raid-boss display when multiple bosses are active
 - combined local dashboard preview
-- targeted image upload to individual Times Gate displays
+- targeted static-image upload to individual Times Gate displays
+- native multi-frame animation upload to individual Times Gate displays
 - complete five-display dashboard upload
 - local Times Gate connection check
 - `.env`-based configuration
@@ -43,6 +47,7 @@ Novachrono aims to provide:
 
 - a coherent visual interface across all five Times Gate displays
 - independently rendered 128 × 128 pixel widgets
+- native device animations where they improve the display
 - local previews without requiring a physical Times Gate
 - configurable data sources and display settings
 - resilient handling of unavailable APIs and network services
@@ -77,9 +82,9 @@ External data sources
         |
         +-- loads configuration
         +-- retrieves and normalizes data
-        +-- renders five 128 x 128 pixel images
+        +-- renders 128 x 128 pixel panels and animation frames
         +-- generates a local dashboard preview
-        +-- sends selected images to the Times Gate
+        +-- sends static images or animations to the Times Gate
         |
         v
 Divoom Times Gate
@@ -87,7 +92,9 @@ Divoom Times Gate
 
 Each Times Gate display can be updated independently.
 
-The current implementation can send individual rendered panels or the complete dashboard. Automatic scheduling, change detection, retries, and recovery behavior are planned.
+The current implementation can send individual rendered widgets, native multi-frame animations, or the complete dashboard.
+
+Automatic scheduling, change detection, retries, and recovery behavior are planned.
 
 ## Architecture
 
@@ -130,11 +137,39 @@ src/novachrono/
         └── icons.py
 ```
 
+The main data flow is:
+
+```text
+External source
+        |
+        v
+Source adapter
+        |
+        v
+Normalized application model
+        |
+        v
+Widget renderer
+        |
+        v
+Pillow image / animation frames
+        |
+        +-- local preview
+        |
+        +-- Times Gate output
+```
+
 ### Widgets
 
 Widgets render 128 × 128 pixel Pillow images.
 
-They do not communicate directly with the Times Gate.
+Some widgets can additionally render multiple frames for native Times Gate animations.
+
+Widgets do not:
+
+- perform network requests
+- access environment variables
+- communicate directly with the Times Gate
 
 Current widgets:
 
@@ -152,12 +187,43 @@ Planned widgets include:
 
 Current weather data is provided by [Open-Meteo](https://open-meteo.com/).
 
-Novachrono retrieves current temperature, weather conditions, daily high and low
-temperatures, precipitation probability, and day/night information. Provider-specific
-weather codes are normalized before they reach the widget renderer.
+Novachrono retrieves:
 
-Open-Meteo data is provided under the
-[CC BY 4.0 license](https://creativecommons.org/licenses/by/4.0/).
+- current temperature
+- current weather condition
+- daily high temperature
+- daily low temperature
+- maximum precipitation probability
+- day/night information
+
+Provider-specific weather codes are normalized into Novachrono's own weather model before they reach the widget renderer.
+
+Rain and fog use native multi-frame animations on the Times Gate.
+
+Other weather conditions currently render as static panels.
+
+Open-Meteo data is provided under the [CC BY 4.0 license](https://creativecommons.org/licenses/by/4.0/).
+
+### Pokémon GO Data
+
+Current five-star and Mega raid data is provided by [ScrapedDuck](https://github.com/bigfoott/ScrapedDuck).
+
+ScrapedDuck provides:
+
+- raid boss names
+- raid tiers
+- shiny availability
+- artwork URLs
+
+Shadow raids and unrelated raid tiers are currently excluded from the dashboard.
+
+PokeAPI is used as a best-effort source for localized Pokémon species names.
+
+If localization fails, Novachrono keeps the original ScrapedDuck name.
+
+Artwork downloads are also best-effort. A missing or unavailable image does not prevent the raid widget from rendering.
+
+If multiple relevant raid bosses are active, Novachrono renders multiple frames and lets the Times Gate rotate through them natively.
 
 ### Design
 
@@ -167,13 +233,16 @@ The `design` package contains visual elements shared between widgets:
 - widget headers
 - colors
 - panel dimensions
+- reusable drawing primitives
 - reusable design constants
 
 Widget-specific geometry remains inside the corresponding widget unless it becomes genuinely reusable.
 
+The visual design intentionally accounts for the physical Times Gate display, where very small bright pixels can appear stronger than they do in a desktop PNG preview.
+
 ### Dashboard
 
-The dashboard renderer creates the five panel images and assigns widgets to displays.
+The dashboard renderer creates a static five-panel snapshot and assigns widgets to display positions.
 
 Current assignments:
 
@@ -185,7 +254,9 @@ Panel index 3 -> pokemon_go
 Panel index 4 -> placeholder
 ```
 
-The physical displays are therefore numbered 1 through 5, while the internal panel indices range from 0 through 4.
+The physical displays are therefore numbered 1 through 5, while internal panel indices range from 0 through 4.
+
+Animation delivery is handled separately by the CLI and Times Gate output adapter.
 
 ### Configuration
 
@@ -209,14 +280,16 @@ de_DE
 en_US
 ```
 
-The current localized widget text is the weather title:
+The current localized widget text includes the weather title:
 
 ```text
 de_DE -> WETTER
 en_US -> WEATHER
 ```
 
-The clock currently uses a numeric time and date representation and therefore does not require locale-specific date formatting.
+The clock uses a numeric time and date representation and therefore does not currently require locale-specific date formatting.
+
+Pokémon species names are localized separately through PokeAPI.
 
 ### Units
 
@@ -229,11 +302,15 @@ C
 F
 ```
 
-Fahrenheit values are converted during rendering. Weather typography adapts to wider values such as negative temperatures and three-digit Fahrenheit temperatures.
+Fahrenheit values are converted during rendering.
+
+Weather typography adapts to wider values such as negative temperatures and three-digit Fahrenheit temperatures.
 
 ### Preview
 
-The preview module combines all five panel images into one PNG file for local inspection.
+The preview module combines one static image for each of the five panels into a single PNG file for local inspection.
+
+Animations are not represented as animated files in the dashboard preview. The preview uses the static panel representation of each widget.
 
 This allows visual development and most automated testing without access to physical hardware.
 
@@ -244,10 +321,17 @@ Output adapters deliver rendered images to external destinations.
 The Times Gate adapter:
 
 - communicates through the local Times Gate HTTP API
-- validates panel numbers and image dimensions
+- validates panel indices
+- validates image dimensions
 - encodes panel images as Base64 JPEG data
-- sends images to individual displays
+- sends static images to individual displays
+- sends native multi-frame animations
+- uses one Times Gate picture ID across the frames of an animation
 - translates network and device errors into application-specific exceptions
+
+Animations are executed by the Times Gate itself.
+
+Novachrono does not keep a Python process in a sleep/update loop to simulate animation.
 
 ### Command-Line Interface
 
@@ -299,7 +383,7 @@ uv run novachrono --help
 
 Novachrono automatically loads a `.env` file from the current working directory.
 
-Create your local configuration from the provided example:
+Create your local configuration from the provided example.
 
 ### PowerShell
 
@@ -367,7 +451,7 @@ C
 F
 ```
 
-The configuration parser also accepts the aliases:
+The configuration parser also accepts:
 
 ```text
 CELSIUS
@@ -391,6 +475,15 @@ NOVACHRONO_WEATHER_LATITUDE
 NOVACHRONO_WEATHER_LONGITUDE
 ```
 
+Latitude and longitude must either both be configured or both be omitted.
+
+Valid ranges are:
+
+```text
+latitude  -> -90 to 90
+longitude -> -180 to 180
+```
+
 ### Times Gate Host
 
 The host must contain only the local IP address or hostname.
@@ -409,6 +502,12 @@ http://
 https://
 :9000
 /divoom_api
+```
+
+The local API currently uses:
+
+```text
+http://<host>:9000/divoom_api
 ```
 
 ### Times Gate Token
@@ -484,7 +583,16 @@ This sends a read-only configuration request to the configured Times Gate.
 uv run novachrono send-clock
 ```
 
-The clock is currently assigned to physical display 3.
+The clock is assigned to physical display 3.
+
+It uses a native Times Gate animation for the horizontal Horizon sweep indicator.
+
+The current animation uses:
+
+```text
+26 frames
+250 ms per frame
+```
 
 ### Send the Weather Widget
 
@@ -492,9 +600,15 @@ The clock is currently assigned to physical display 3.
 uv run novachrono send-weather
 ```
 
-The weather widget is currently assigned to physical display 2.
+The weather widget is assigned to physical display 2.
 
 Weather data is retrieved from Open-Meteo using the configured coordinates.
+
+Rain uses a native three-frame animation.
+
+Fog uses a native ten-frame animation.
+
+Other weather conditions currently use a static image.
 
 ### Send the Pokémon GO Widget
 
@@ -502,9 +616,15 @@ Weather data is retrieved from Open-Meteo using the configured coordinates.
 uv run novachrono send-pokemon
 ```
 
-The Pokémon GO widget is currently assigned to physical display 4.
+The Pokémon GO widget is assigned to physical display 4.
 
-Raid data is retrieved from ScrapedDuck. Boss artwork is retrieved from the PokéAPI.
+Raid data and artwork URLs are retrieved from ScrapedDuck.
+
+PokeAPI is used to localize Pokémon names where possible.
+
+Artwork downloads and name localization are best-effort and do not prevent the widget from rendering when an external request fails.
+
+When multiple relevant raid bosses are active, the widget rotates through them using a native Times Gate animation.
 
 ### Send the Complete Dashboard
 
@@ -514,7 +634,17 @@ uv run novachrono send-dashboard
 
 This renders all five panels and sends them to the Times Gate one after another.
 
-If one or more displays fail, Novachrono reports the affected display numbers.
+Widgets with multiple frames are delivered as native Times Gate animations.
+
+Currently this means:
+
+- the clock is animated
+- rain is animated
+- fog is animated
+- Pokémon GO raids are animated when multiple bosses are active
+- placeholders and all other weather states are static
+
+If one or more displays fail, Novachrono continues attempting the remaining displays and reports the affected display numbers afterward.
 
 ### Run as a Python Module
 
@@ -585,29 +715,43 @@ uv run pytest
 uv run novachrono preview
 ```
 
-Most tests do not require access to a physical Times Gate. Network calls to the device are mocked in the test suite.
+Hardware-related changes should additionally be smoke-tested against a physical Times Gate when available:
+
+```shell
+uv run novachrono send-clock
+uv run novachrono send-dashboard
+```
+
+Most automated tests do not require access to a physical Times Gate.
+
+Network calls to external APIs and the device are mocked in the test suite.
 
 ## Testing
 
-The test suite currently covers:
+The test suite covers:
 
-- CLI behavior
+- CLI behavior and delivery routing
 - application configuration
 - Celsius and Fahrenheit conversion
 - negative and three-digit temperatures
 - internationalization
 - dashboard composition
-- weather rendering
+- weather rendering and animation
 - Open-Meteo request, response, and weather-code handling
-- clock rendering
+- ScrapedDuck raid parsing
+- PokeAPI name localization
+- Pokémon artwork retrieval and normalization
+- Pokémon GO raid rendering and rotation
+- clock rendering and animation
 - shared design invariants
 - preview generation
-- Times Gate request generation
+- Times Gate static-image request generation
+- Times Gate native-animation request generation
 - Times Gate response and error handling
 
-Renderer tests focus primarily on behavior and deterministic output instead of maintaining large fragile pixel snapshots.
+Renderer tests focus primarily on behavior and deterministic output instead of maintaining large fragile golden-image snapshots.
 
-A small targeted pixel regression test protects the continuity of the shared HUD frame because this has previously been a real rendering regression.
+Small targeted pixel assertions are used only where they protect a specific visual invariant.
 
 ## Security
 
@@ -622,7 +766,9 @@ Never commit:
 
 `.env.example` contains documentation values only and is intended to remain in version control.
 
-If a real token is accidentally committed, revoke or replace it where possible. Removing the token only from the latest source file does not remove it from Git history.
+If a real token is accidentally committed, revoke or replace it where possible.
+
+Removing a token only from the latest source file does not remove it from Git history.
 
 Potential security issues should be reported according to the [Security Policy](SECURITY.md).
 
@@ -646,6 +792,7 @@ Potential security issues should be reported according to the [Security Policy](
 - [x] place the clock on display 3
 - [x] refine typography and spacing for the physical display
 - [x] integrate the shared HUD frame
+- [x] add native Horizon sweep animation
 
 ### Weather Widget
 
@@ -660,6 +807,8 @@ Potential security issues should be reported according to the [Security Policy](
 - [x] connect a real weather data source
 - [x] map provider weather conditions to the internal weather model
 - [x] remove demo weather data
+- [x] animate rain
+- [x] animate fog
 
 ### Times Gate Integration
 
@@ -667,22 +816,34 @@ Potential security issues should be reported according to the [Security Policy](
 - [x] authenticate with the local token
 - [x] check device connectivity
 - [x] send an image to an individual display
+- [x] send native multi-frame animations
 - [x] send the complete dashboard
 - [ ] avoid sending unchanged images
 - [ ] add retry and recovery behavior
 
+### Pokémon GO Widget
+
+- [x] research a reliable Pokémon GO raid data source
+- [x] retrieve five-star and Mega raid bosses
+- [x] exclude shadow and unrelated raid tiers
+- [x] retrieve raid artwork
+- [x] localize Pokémon names
+- [x] render the Pokémon GO raid widget
+- [x] support multiple simultaneous raid bosses
+- [x] rotate multiple bosses using native animation
+
 ### Additional Widgets
 
-- [x] research a reliable Pokémon GO event data source
-- [x] render current raid information
-- [x] render Pokémon GO raid bosses widget
 - [ ] implement GitHub status data
-- [ ] add configurable calendar or system-status widgets
+- [ ] add configurable calendar information
+- [ ] add system-status information
 
 ### Runtime and Deployment
 
 - [ ] add scheduled dashboard updates
 - [ ] make update intervals configurable
+- [ ] avoid unnecessary unchanged updates
+- [ ] add retry and recovery behavior
 - [ ] add structured logging
 - [ ] support graceful shutdown
 - [ ] document Raspberry Pi installation
@@ -699,7 +860,9 @@ Future configuration may include:
 - display assignments
 - visual theme settings
 
-The existing environment-variable configuration should remain small and understandable. Additional structure should only be introduced when the project genuinely requires it.
+The existing environment-variable configuration should remain small and understandable.
+
+Additional structure should only be introduced when the project genuinely requires it.
 
 ## Contributing
 
