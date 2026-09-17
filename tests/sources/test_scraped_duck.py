@@ -4,7 +4,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from novachrono.pokemon_go import RaidBoss
+from novachrono.models.pokemon_go import RaidBoss
 from novachrono.sources.scraped_duck import (
     ScrapedDuckError,
     fetch_raid_roster,
@@ -63,6 +63,11 @@ def test_fetch_raid_roster_normalizes_relevant_raids(
                 image_url="https://example.com/zacian.png",
             ),
             _create_raid(
+                name="Shadow Giratina",
+                tier="5-Star Raids",
+                image_url="https://example.com/giratina.png",
+            ),
+            _create_raid(
                 name="Mega Gengar",
                 tier="Mega Raids",
                 image_url="https://example.com/mega-gengar.png",
@@ -84,6 +89,14 @@ def test_fetch_raid_roster_normalizes_relevant_raids(
         ),
     )
 
+    assert roster.shadow_five_star == (
+        RaidBoss(
+            name="Giratina",
+            can_be_shiny=True,
+            artwork_url="https://example.com/giratina.png",
+        ),
+    )
+
     assert roster.mega == (
         RaidBoss(
             name="Mega Gengar",
@@ -94,7 +107,7 @@ def test_fetch_raid_roster_normalizes_relevant_raids(
 
 
 @patch("novachrono.sources.scraped_duck.urlopen")
-def test_fetch_raid_roster_ignores_shadow_five_star_raids(
+def test_fetch_raid_roster_separates_shadow_five_star_raids(
     mocked_urlopen: MagicMock,
 ) -> None:
     mocked_urlopen.return_value = _create_response(
@@ -114,6 +127,7 @@ def test_fetch_raid_roster_ignores_shadow_five_star_raids(
             _create_raid(
                 name="Shadow Giratina",
                 tier="5-Star Raids",
+                image_url="https://example.com/giratina.png",
             ),
         ]
     )
@@ -125,6 +139,42 @@ def test_fetch_raid_roster_ignores_shadow_five_star_raids(
         "Mesprit",
         "Azelf",
     ]
+
+    assert roster.shadow_five_star == (
+        RaidBoss(
+            name="Giratina",
+            can_be_shiny=True,
+            artwork_url="https://example.com/giratina.png",
+        ),
+    )
+
+
+@patch("novachrono.sources.scraped_duck.urlopen")
+def test_fetch_raid_roster_ignores_lower_tier_shadow_raids(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response(
+        [
+            _create_raid(
+                name="Shadow Machop",
+                tier="1-Star Raids",
+            ),
+            _create_raid(
+                name="Shadow Sneasel",
+                tier="3-Star Raids",
+            ),
+            _create_raid(
+                name="Shadow Giratina",
+                tier="5-Star Raids",
+            ),
+        ]
+    )
+
+    roster = fetch_raid_roster()
+
+    assert roster.five_star == ()
+    assert [boss.name for boss in roster.shadow_five_star] == ["Giratina"]
+    assert roster.mega == ()
 
 
 @patch("novachrono.sources.scraped_duck.urlopen")
@@ -160,6 +210,14 @@ def test_fetch_raid_roster_preserves_multiple_bosses(
                 name="Zamazenta",
                 tier="5-Star Raids",
             ),
+            _create_raid(
+                name="Shadow Giratina",
+                tier="5-Star Raids",
+            ),
+            _create_raid(
+                name="Shadow Palkia",
+                tier="5-Star Raids",
+            ),
         ]
     )
 
@@ -168,6 +226,11 @@ def test_fetch_raid_roster_preserves_multiple_bosses(
     assert [boss.name for boss in roster.five_star] == [
         "Zacian",
         "Zamazenta",
+    ]
+
+    assert [boss.name for boss in roster.shadow_five_star] == [
+        "Giratina",
+        "Palkia",
     ]
 
 
@@ -182,6 +245,10 @@ def test_fetch_raid_roster_accepts_legacy_tier_names(
                 tier="Tier 5",
             ),
             _create_raid(
+                name="Shadow Legacy",
+                tier="Tier 5",
+            ),
+            _create_raid(
                 name="Mega Boss",
                 tier="Mega",
             ),
@@ -191,7 +258,9 @@ def test_fetch_raid_roster_accepts_legacy_tier_names(
     roster = fetch_raid_roster()
 
     assert len(roster.five_star) == 1
+    assert len(roster.shadow_five_star) == 1
     assert len(roster.mega) == 1
+    assert roster.shadow_five_star[0].name == "Legacy"
 
 
 @patch("novachrono.sources.scraped_duck.urlopen")
@@ -214,6 +283,7 @@ def test_fetch_raid_roster_ignores_other_tiers(
     roster = fetch_raid_roster()
 
     assert roster.five_star == ()
+    assert roster.shadow_five_star == ()
     assert roster.mega == ()
 
 
@@ -227,6 +297,27 @@ def test_fetch_raid_roster_rejects_invalid_relevant_boss(
                 "name": "Zacian",
                 "tier": "5-Star Raids",
                 "image": "https://example.com/zacian.png",
+            }
+        ]
+    )
+
+    with pytest.raises(
+        ScrapedDuckError,
+        match="canBeShiny",
+    ):
+        fetch_raid_roster()
+
+
+@patch("novachrono.sources.scraped_duck.urlopen")
+def test_fetch_raid_roster_rejects_invalid_shadow_five_star_boss(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response(
+        [
+            {
+                "name": "Shadow Giratina",
+                "tier": "5-Star Raids",
+                "image": "https://example.com/giratina.png",
             }
         ]
     )

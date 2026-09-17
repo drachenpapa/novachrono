@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from novachrono.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import RaidBoss, RaidRoster
 from novachrono.sources.pokeapi import (
     PokeApiError,
     fetch_localized_pokemon_name,
@@ -156,6 +156,7 @@ def test_localize_raid_roster_keeps_english_without_request(
     roster = _create_roster(
         five_star_name="Mesprit",
         mega_name="Mega Blaziken",
+        shadow_five_star_name="Giratina",
     )
 
     localized = localize_raid_roster(
@@ -174,11 +175,13 @@ def test_localize_raid_roster_preserves_boss_data(
     mocked_urlopen.side_effect = [
         _create_response("Vesprit"),
         _create_response("Lohgock"),
+        _create_response("Giratina"),
     ]
 
     roster = _create_roster(
         five_star_name="Mesprit",
         mega_name="Mega Blaziken",
+        shadow_five_star_name="Giratina",
     )
 
     localized = localize_raid_roster(
@@ -198,6 +201,12 @@ def test_localize_raid_roster_preserves_boss_data(
         artwork_url="https://example.com/mega-blaziken.png",
     )
 
+    assert localized.shadow_five_star[0] == RaidBoss(
+        name="Giratina",
+        can_be_shiny=True,
+        artwork_url="https://example.com/giratina.png",
+    )
+
 
 @patch("novachrono.sources.pokeapi.urlopen")
 def test_localize_raid_roster_localizes_same_name_only_once(
@@ -213,6 +222,7 @@ def test_localize_raid_roster_localizes_same_name_only_once(
     roster = RaidRoster(
         five_star=(boss,),
         mega=(boss,),
+        shadow_five_star=(boss,),
     )
 
     localized = localize_raid_roster(
@@ -222,6 +232,7 @@ def test_localize_raid_roster_localizes_same_name_only_once(
 
     assert localized.five_star[0].name == "Vesprit"
     assert localized.mega[0].name == "Vesprit"
+    assert localized.shadow_five_star[0].name == "Vesprit"
     assert mocked_urlopen.call_count == 1
 
 
@@ -234,6 +245,7 @@ def test_localize_raid_roster_falls_back_when_api_fails(
     roster = _create_roster(
         five_star_name="Mesprit",
         mega_name="Mega Blaziken",
+        shadow_five_star_name="Giratina",
     )
 
     localized = localize_raid_roster(
@@ -308,7 +320,19 @@ def _create_roster(
     *,
     five_star_name: str,
     mega_name: str,
+    shadow_five_star_name: str | None = None,
 ) -> RaidRoster:
+    shadow_five_star = ()
+
+    if shadow_five_star_name is not None:
+        shadow_five_star = (
+            RaidBoss(
+                name=shadow_five_star_name,
+                can_be_shiny=True,
+                artwork_url="https://example.com/giratina.png",
+            ),
+        )
+
     return RaidRoster(
         five_star=(
             RaidBoss(
@@ -324,4 +348,5 @@ def _create_roster(
                 artwork_url="https://example.com/mega-blaziken.png",
             ),
         ),
+        shadow_five_star=shadow_five_star,
     )

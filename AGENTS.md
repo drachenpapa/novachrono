@@ -89,7 +89,10 @@ Pillow images / animation frames
      |
      +--> Local preview
      |
-     +--> Times Gate output adapter
+     +--> Output delivery
+              |
+              v
+        Times Gate adapter
 ```
 
 This is a conceptual structure, not a requirement to create an interface or class for every layer.
@@ -101,11 +104,23 @@ This is a conceptual structure, not a requirement to create an interface or clas
 - loads and validates application configuration
 - centralizes environment-variable access
 
+`models/`
+
+- contains provider-independent normalized application data
+- must not depend on source adapters, widgets, or output adapters
+
 `dashboard.py`
 
 - composes the five static dashboard panels
 - assigns widgets to panel positions
 - does not communicate with external services or devices
+
+`display_state.py`
+
+- fingerprints rendering-relevant state
+- reads and writes persistent display-state fingerprints
+- treats missing or malformed state as a cache miss
+- only stores non-sensitive SHA-256 fingerprints
 
 `design/`
 
@@ -117,6 +132,7 @@ This is a conceptual structure, not a requirement to create an interface or clas
 
 - renders deterministic 128 × 128 Pillow images
 - may render multiple frames for native Times Gate animations
+- owns widget-specific presentation behavior, including animation timing
 - must not perform network requests
 - must not access environment variables
 - must not communicate with the Times Gate
@@ -127,11 +143,18 @@ This is a conceptual structure, not a requirement to create an interface or clas
 - validates important provider responses
 - converts provider-specific data into Novachrono application models
 
-`outputs/`
+`outputs/delivery.py`
 
-- contains external output adapters
-- currently contains the Times Gate adapter
-- handles static and native multi-frame device delivery
+- handles generic static-versus-animation delivery
+- performs the current single device-delivery retry
+- must remain independent of individual widget domains
+
+`outputs/times_gate.py`
+
+- implements the Times Gate local API adapter
+- validates device-specific data
+- encodes images
+- sends static images and native animations
 
 `preview.py`
 
@@ -144,6 +167,12 @@ This is a conceptual structure, not a requirement to create an interface or clas
 `i18n.py`
 
 - contains the project's small UI translation table
+
+`cli.py`
+
+- orchestrates one-shot application commands
+- connects configuration, sources, models, widgets, state, and outputs
+- must not become a permanently running scheduler
 
 ## Current Dashboard
 
@@ -169,7 +198,7 @@ The Pokémon GO widget uses:
 - ScrapedDuck artwork URLs
 - PokeAPI for best-effort Pokémon name localization
 
-The clock, some weather conditions, and multi-boss Pokémon GO states use native Times Gate animations.
+Some weather conditions and multi-boss Pokémon GO states use native Times Gate animations.
 
 ## Rendering
 
@@ -190,7 +219,9 @@ Some widgets may return multiple images representing animation frames.
 
 Animation frame generation belongs to the widget.
 
-Animation timing and device delivery belong outside the widget.
+Widget-specific frame timing also belongs to the widget because it is part of the intended presentation.
+
+Transport logic and device delivery belong in `outputs/`.
 
 The physical Times Gate display can make small bright pixels bloom.
 
@@ -227,14 +258,13 @@ The clock:
 - displays the numeric date
 - requires a timezone-aware `datetime`
 - uses the shared HUD frame
-- uses a horizontal Horizon-style indicator
-- renders multiple frames for a native Times Gate sweep animation
+- renders a single static panel
 
-The current clock animation is intentionally simple and calm.
+Clock rendering must remain independent of scheduling and device communication.
 
-Do not replace native Times Gate animation with a Python-side sleep/update loop without a concrete reason.
+`send-clock` intentionally sends every time it is invoked.
 
-Do not make the clock depend on network access or device communication.
+Periodic clock updates belong outside the widget renderer and outside a permanently running Python scheduler.
 
 ## Weather
 
@@ -262,7 +292,27 @@ RAIN
 FOG
 ```
 
+Rain currently uses:
+
+```text
+3 frames
+350 ms per frame
+```
+
+Fog currently uses:
+
+```text
+10 frames
+500 ms per frame
+```
+
 Other weather conditions currently render as static panels.
+
+Weather change detection is based on rendering-relevant normalized state.
+
+`send-weather` skips Times Gate delivery when the persisted fingerprint matches.
+
+`send-weather --force` bypasses that comparison.
 
 Do not reintroduce forecast fields unless an implemented feature actually needs them.
 
@@ -271,21 +321,101 @@ Do not reintroduce forecast fields unless an implemented feature actually needs 
 The Pokémon GO widget currently displays:
 
 - regular five-star raid bosses
+- Shadow five-star raid bosses
 - Mega raid bosses
 - shiny availability
 - downloaded boss artwork when available
 
-Shadow raids are intentionally excluded.
+The UI labels Shadow five-star raids as:
+
+```text
+CRYPTO
+```
+
+Regular five-star and Shadow five-star bosses share the upper slot.
+
+Regular five-star entries are followed by Shadow five-star entries.
+
+The upper slot uses:
+
+- five cyan sparkle-stars for regular five-star raids
+- `CRYPTO` for Shadow five-star raids
+
+Mega raids use the lower slot.
 
 When multiple bosses are active, the renderer produces multiple frames.
 
-If the five-star and Mega boss counts differ, the shorter category wraps while the longer category continues.
+The animation length is determined by the longest non-empty category.
+
+Shorter non-empty categories wrap while the longer category continues.
+
+Pokémon GO raid frames currently use a duration of:
+
+```text
+10 seconds
+```
 
 Artwork and name localization are best-effort.
 
 Failure to download artwork or localize a name should not prevent the widget from rendering usable raid information.
 
+`send-pokemon` compares the raw normalized ScrapedDuck roster before localization and artwork retrieval.
+
+If the persisted fingerprint matches:
+
+- localization is skipped
+- artwork retrieval is skipped
+- rendering is skipped
+- device delivery is skipped
+
+`send-pokemon --force` bypasses change detection.
+
 Do not add unrelated Pokémon GO data unless an implemented widget needs it.
+
+## Display State
+
+Persistent display state lives under:
+
+```text
+~/.novachrono/
+```
+
+Current files:
+
+```text
+weather.state
+pokemon-go.state
+```
+
+Each file contains one SHA-256 fingerprint.
+
+Keep weather and Pokémon GO state separate.
+
+They are independent one-shot commands and may run in separate processes.
+
+A shared read-modify-write state file would introduce unnecessary coordination and possible lost updates between concurrent processes.
+
+Missing or malformed state is treated as a cache miss.
+
+State must only be updated after successful delivery of the corresponding display.
+
+A state-write failure after successful device delivery should be reported as a warning rather than pretending that device delivery failed.
+
+Do not store raw weather data, Pokémon data, credentials, tokens, or other sensitive values in these files without a concrete requirement.
+
+## Full Synchronization and Recovery
+
+`send-dashboard` is the full synchronization command.
+
+It always sends all five displays regardless of stored fingerprints.
+
+It updates weather and Pokémon GO state only after the corresponding panel has been delivered successfully.
+
+This command is also the manual recovery mechanism if the Times Gate has restarted or lost its displayed state while local fingerprints still exist.
+
+Do not assume that persisted fingerprints prove that the physical device still contains the corresponding image.
+
+Automatic recovery after device restarts remains a deployment concern that has not yet been implemented.
 
 ## Internationalization
 
@@ -310,7 +440,7 @@ User-facing times must respect the configured timezone.
 
 Do not mix naive and timezone-aware datetime objects.
 
-Time-dependent behavior should be testable using explicit or injected timestamps.
+Time-dependent behavior should be testable using explicit or injected timestamps where practical.
 
 ## External Data Sources
 
@@ -342,6 +472,10 @@ Do not introduce a generic HTTP client solely because several source modules use
 
 Small independent adapters are currently preferred.
 
+Source retrieval currently has no automatic retry.
+
+Do not add source retry behavior without a demonstrated requirement.
+
 ## Times Gate
 
 Treat the Times Gate as an external adapter.
@@ -362,19 +496,48 @@ The Times Gate adapter currently supports:
 
 Native animations should use the Times Gate animation mechanism rather than repeated Python-side uploads.
 
-Do not add:
+Generic delivery currently retries one failed Times Gate delivery once after five seconds.
+
+Keep that behavior simple.
+
+Do not introduce:
 
 - retry frameworks
 - background workers
 - transport abstractions
 - connection pools
 - fallback loops
+- generic resilience frameworks
 
 unless there is a demonstrated requirement.
 
-Future long-running operation should tolerate temporary device outages and recover automatically.
+## Scheduling and Deployment
 
-That future requirement does not justify implementing retry or scheduling infrastructure prematurely.
+Novachrono commands are intentionally one-shot operations.
+
+Do not add a permanently running application scheduler merely to update the clock, weather, or Pokémon GO widgets.
+
+The intended Raspberry Pi deployment uses external scheduling, preferably systemd services and timers.
+
+Target schedule:
+
+```text
+clock    -> every minute
+weather  -> :00 / :15 / :30 / :45
+pokemon  -> every full hour
+```
+
+At full hours, several commands may become eligible simultaneously.
+
+Their Times Gate transfers must be serialized at deployment level so independent processes do not upload to the device concurrently.
+
+A shared deployment-level lock such as `flock` is preferred over adding scheduler coordination to the Python application.
+
+State-file concurrency does not require a shared lock because weather and Pokémon GO use separate state files.
+
+A full `send-dashboard` synchronization after boot is expected to be part of the deployment design.
+
+Do not implement these deployment details until the relevant Raspberry Pi/systemd work is requested.
 
 ## Configuration
 
@@ -456,17 +619,22 @@ Current local checks are:
 ```shell
 uv run ruff format --check .
 uv run ruff check .
+uv run pytest
 uv run bandit -r src
 uv run pip-audit
-uv run pytest
-uv run novachrono preview
 ```
+
+A pip-audit skip entry for the local unpublished `novachrono` package is expected.
 
 Hardware-related changes should additionally be smoke-tested on a Times Gate when possible:
 
 ```shell
-uv run novachrono send-clock
 uv run novachrono send-dashboard
+uv run novachrono send-weather
+uv run novachrono send-pokemon
+uv run novachrono send-clock
+uv run novachrono send-weather --force
+uv run novachrono send-pokemon --force
 ```
 
 ## Formatting and Linting
@@ -521,6 +689,7 @@ Examples of abstractions that are currently unnecessary unless requirements chan
 - generic animation classes
 - plugin systems
 - event buses
+- internal scheduler frameworks
 
 Duplication is acceptable when removing it would create a more complicated dependency structure.
 

@@ -13,7 +13,7 @@ from novachrono.design import (
     WEATHER_SUN_COLOR,
     WEATHER_SUN_RAY_COLOR,
 )
-from novachrono.weather import WeatherCondition
+from novachrono.models.weather import WeatherCondition
 
 FOG_FRAME_OFFSETS: Final = (
     (-4, 0, 4),

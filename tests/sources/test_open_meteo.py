@@ -7,15 +7,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from novachrono.models.weather import (
+    CurrentWeather,
+    WeatherCondition,
+)
 from novachrono.sources.open_meteo import (
     DEFAULT_TIMEOUT_SECONDS,
     OpenMeteoError,
     fetch_current_weather,
     map_weather_code,
-)
-from novachrono.weather import (
-    CurrentWeather,
-    WeatherCondition,
 )
 
 BERLIN = ZoneInfo("Europe/Berlin")

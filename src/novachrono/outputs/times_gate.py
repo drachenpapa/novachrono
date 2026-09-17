@@ -67,9 +67,7 @@ class TimesGateConfig:
         """Return the local Times Gate API URL."""
 
         # The Times Gate local API is intentionally accessed over HTTP.
-        return (  # NOSONAR(S5332)
-            f"{LOCAL_API_SCHEME}://{self.host}:{DEFAULT_API_PORT}{DEFAULT_API_PATH}"
-        )
+        return f"{LOCAL_API_SCHEME}://{self.host}:{DEFAULT_API_PORT}{DEFAULT_API_PATH}"
 
 
 class TimesGateClient:

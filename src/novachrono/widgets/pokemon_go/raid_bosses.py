@@ -13,7 +13,7 @@ from novachrono.design import (
     draw_widget_header,
     find_font_that_fits,
 )
-from novachrono.pokemon_go import (
+from novachrono.models.pokemon_go import (
     RaidBoss,
     RaidRoster,
     RaidTier,
@@ -22,6 +22,8 @@ from novachrono.pokemon_go import (
 ARTWORK_FRAME_SIZE: Final = 32
 ARTWORK_SIZE: Final = 28
 ARTWORK_LEFT: Final = 17
+
+RAID_FRAME_DURATION_MS: Final = 10_000
 
 TEXT_LEFT: Final = 56
 TEXT_RIGHT: Final = 111
@@ -41,6 +43,9 @@ FIVE_STAR_SPARKLE_COUNT: Final = 5
 FIVE_STAR_SPARKLE_SPACING: Final = 6
 FIVE_STAR_SPARKLE_RADIUS: Final = 2
 
+CRYPTO_LABEL: Final = "CRYPTO"
+MEGA_LABEL: Final = "MEGA"
+
 SHINY_COLOR: Final = "#FFD447"
 
 
@@ -49,7 +54,7 @@ def render_raid_panel(
     *,
     artwork_by_url: Mapping[str, Image.Image] | None = None,
 ) -> Image.Image:
-    """Render the current five-star and Mega raid roster."""
+    """Render the current five-star, Shadow five-star, and Mega raid roster."""
 
     image = create_panel()
     draw = ImageDraw.Draw(image)
@@ -57,22 +62,30 @@ def render_raid_panel(
     draw_widget_header(
         draw,
         title="POKEMON GO",
-        font_size=9,
+        font_size=11,
     )
 
-    if roster.five_star and roster.mega:
+    upper_raid = _first_upper_raid(roster)
+
+    if upper_raid is not None and roster.mega:
+        upper_tier, upper_boss = upper_raid
+
         _draw_dual_raid_layout(
             image,
             draw,
-            roster=roster,
+            upper_tier=upper_tier,
+            upper_boss=upper_boss,
+            mega_boss=roster.mega[0],
             artwork_by_url=artwork_by_url,
         )
-    elif roster.five_star:
+    elif upper_raid is not None:
+        upper_tier, upper_boss = upper_raid
+
         _draw_single_raid_layout(
             image,
             draw,
-            tier=RaidTier.FIVE_STAR,
-            boss=roster.five_star[0],
+            tier=upper_tier,
+            boss=upper_boss,
             artwork_by_url=artwork_by_url,
         )
     elif roster.mega:
@@ -102,7 +115,7 @@ def render_raid_animation(
 
     frame_count = max(
         1,
-        len(roster.five_star),
+        len(_upper_raids(roster)),
         len(roster.mega),
     )
 
@@ -123,56 +136,104 @@ def _create_frame_roster(
     *,
     frame_index: int,
 ) -> RaidRoster:
-    return RaidRoster(
-        five_star=_select_boss_for_frame(
-            roster.five_star,
-            frame_index=frame_index,
-        ),
-        mega=_select_boss_for_frame(
-            roster.mega,
-            frame_index=frame_index,
-        ),
+    selected_upper_raid = _select_upper_raid_for_frame(
+        _upper_raids(roster),
+        frame_index=frame_index,
     )
+
+    selected_mega_boss = _select_boss_for_frame(
+        roster.mega,
+        frame_index=frame_index,
+    )
+
+    five_star: tuple[RaidBoss, ...] = ()
+    shadow_five_star: tuple[RaidBoss, ...] = ()
+    mega = () if selected_mega_boss is None else (selected_mega_boss,)
+
+    if selected_upper_raid is not None:
+        tier, boss = selected_upper_raid
+
+        if tier is RaidTier.FIVE_STAR:
+            five_star = (boss,)
+        else:
+            shadow_five_star = (boss,)
+
+    return RaidRoster(
+        five_star=five_star,
+        mega=mega,
+        shadow_five_star=shadow_five_star,
+    )
+
+
+def _upper_raids(
+    roster: RaidRoster,
+) -> tuple[tuple[RaidTier, RaidBoss], ...]:
+    five_star = tuple((RaidTier.FIVE_STAR, boss) for boss in roster.five_star)
+    shadow_five_star = tuple((RaidTier.SHADOW_FIVE_STAR, boss) for boss in roster.shadow_five_star)
+
+    return five_star + shadow_five_star
+
+
+def _select_upper_raid_for_frame(
+    raids: tuple[tuple[RaidTier, RaidBoss], ...],
+    *,
+    frame_index: int,
+) -> tuple[RaidTier, RaidBoss] | None:
+    if not raids:
+        return None
+
+    return raids[frame_index % len(raids)]
 
 
 def _select_boss_for_frame(
     bosses: tuple[RaidBoss, ...],
     *,
     frame_index: int,
-) -> tuple[RaidBoss, ...]:
+) -> RaidBoss | None:
     if not bosses:
-        return ()
+        return None
 
-    return (bosses[frame_index % len(bosses)],)
+    return bosses[frame_index % len(bosses)]
+
+
+def _first_upper_raid(
+    roster: RaidRoster,
+) -> tuple[RaidTier, RaidBoss] | None:
+    if roster.five_star:
+        return RaidTier.FIVE_STAR, roster.five_star[0]
+
+    if roster.shadow_five_star:
+        return RaidTier.SHADOW_FIVE_STAR, roster.shadow_five_star[0]
+
+    return None
 
 
 def _draw_dual_raid_layout(
     image: Image.Image,
     draw: ImageDraw.ImageDraw,
     *,
-    roster: RaidRoster,
+    upper_tier: RaidTier,
+    upper_boss: RaidBoss,
+    mega_boss: RaidBoss,
     artwork_by_url: Mapping[str, Image.Image] | None,
 ) -> None:
     _draw_raid_section(
         image,
         draw,
         top=34,
-        tier=RaidTier.FIVE_STAR,
-        boss=roster.five_star[0],
+        tier=upper_tier,
+        boss=upper_boss,
         artwork_by_url=artwork_by_url,
     )
 
-    _draw_separator(
-        draw,
-        y=70,
-    )
+    _draw_separator(draw, y=70)
 
     _draw_raid_section(
         image,
         draw,
         top=76,
         tier=RaidTier.MEGA,
-        boss=roster.mega[0],
+        boss=mega_boss,
         artwork_by_url=artwork_by_url,
     )
 
@@ -271,9 +332,11 @@ def _draw_tier_label(
         )
         return
 
+    label = CRYPTO_LABEL if tier is RaidTier.SHADOW_FIVE_STAR else MEGA_LABEL
+
     draw.text(
         (left, top),
-        "MEGA",
+        label,
         font=ImageFont.load_default(size=8),
         fill=FRAME_ACCENT_COLOR,
     )
@@ -299,10 +362,12 @@ def _draw_centered_tier_label(
         )
         return
 
+    label = CRYPTO_LABEL if tier is RaidTier.SHADOW_FIVE_STAR else MEGA_LABEL
+
     draw_centered_text(
         draw,
         y=top,
-        text="MEGA",
+        text=label,
         font=ImageFont.load_default(size=9),
         fill=FRAME_ACCENT_COLOR,
     )
@@ -340,18 +405,7 @@ def _draw_boss_name(
     available_width = right - left + 1
 
     font = find_font_that_fits(
-        draw,
-        text=name,
-        maximum_width=available_width,
-        font_sizes=(
-            15,
-            14,
-            13,
-            12,
-            11,
-            10,
-            9,
-        ),
+        draw, text=name, maximum_width=available_width, font_sizes=(15, 14, 13, 12, 11, 10, 9)
     )
 
     bounding_box = draw.textbbox(
@@ -386,17 +440,7 @@ def _draw_centered_boss_name(
         draw,
         text=name,
         maximum_width=available_width,
-        font_sizes=(
-            17,
-            16,
-            15,
-            14,
-            13,
-            12,
-            11,
-            10,
-            9,
-        ),
+        font_sizes=(17, 16, 15, 14, 13, 12, 11, 10, 9),
     )
 
     bounding_box = draw.textbbox(
@@ -504,12 +548,7 @@ def _draw_artwork_frame(
     bottom = top + size - 1
 
     draw.rounded_rectangle(
-        (
-            left,
-            top,
-            right,
-            bottom,
-        ),
+        (left, top, right, bottom),
         radius=4,
         outline=FRAME_DIM_COLOR,
         width=1,
@@ -636,18 +675,10 @@ def _display_boss_name(
 ) -> str:
     normalized_name = name.strip()
 
-    if tier is RaidTier.MEGA and normalized_name.casefold().startswith(
-        (
-            "mega ",
-            "mega-",
-        )
-    ):
+    if tier is RaidTier.MEGA and normalized_name.casefold().startswith(("mega ", "mega-")):
         normalized_name = normalized_name[5:].strip()
 
     if "(" in normalized_name:
-        normalized_name = normalized_name.split(
-            "(",
-            maxsplit=1,
-        )[0].strip()
+        normalized_name = normalized_name.split("(", maxsplit=1)[0].strip()
 
     return normalized_name.upper()

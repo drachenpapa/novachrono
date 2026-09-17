@@ -15,8 +15,8 @@ from novachrono.design import (
     text_width,
 )
 from novachrono.i18n import DEFAULT_LOCALE, translate
+from novachrono.models.weather import CurrentWeather, WeatherCondition
 from novachrono.units import TemperatureUnit, convert_temperature
-from novachrono.weather import CurrentWeather, WeatherCondition
 from novachrono.widgets.weather.icons import (
     draw_raindrop,
     draw_weather_icon_frame,
@@ -27,6 +27,9 @@ WEATHER_ICON_SIZE: Final = 32
 
 RAIN_ANIMATION_FRAMES: Final = (0, 1, 2)
 FOG_ANIMATION_FRAMES: Final = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+RAIN_FRAME_DURATION_MS: Final = 350
+FOG_FRAME_DURATION_MS: Final = 500
 
 
 def render_weather_panel(
@@ -62,6 +65,20 @@ def render_weather_animation(
         )
         for icon_frame_index in _animation_icon_frames(weather.condition)
     )
+
+
+def weather_frame_duration_ms(condition: WeatherCondition) -> int | None:
+    """Return the native animation duration for a weather condition."""
+
+    match condition:
+        case WeatherCondition.RAIN:
+            return RAIN_FRAME_DURATION_MS
+
+        case WeatherCondition.FOG:
+            return FOG_FRAME_DURATION_MS
+
+        case _:
+            return None
 
 
 def _render_weather_panel(
@@ -121,10 +138,7 @@ def _draw_current_weather(
         frame_index=icon_frame_index,
     )
 
-    temperature = convert_temperature(
-        weather.temperature,
-        temperature_unit,
-    )
+    temperature = convert_temperature(weather.temperature, temperature_unit)
 
     temperature_text = f"{temperature}°{temperature_unit.value}"
 
@@ -146,9 +160,7 @@ def _draw_current_weather(
     )
 
 
-def _draw_detail_separator(
-    draw: ImageDraw.ImageDraw,
-) -> None:
+def _draw_detail_separator(draw: ImageDraw.ImageDraw) -> None:
     """Draw the separator between current weather and details."""
 
     separator_y = 74
@@ -247,10 +259,7 @@ def _temperature_range_layout(
     spacious_text = f"{high_temperature} / {low_temperature} °{temperature_unit.value}"
     compact_text = f"{high_temperature}/{low_temperature}°{temperature_unit.value}"
 
-    layouts = (
-        spacious_text,
-        compact_text,
-    )
+    layouts = (spacious_text, compact_text)
 
     font_sizes = (12, 11, 10, 9, 8, 7)
 
@@ -307,27 +316,19 @@ def _draw_precipitation_group(
 
     draw_raindrop(
         draw,
-        origin=(
-            start_x,
-            y + 3,
-        ),
+        origin=(start_x, y + 3),
         size=droplet_size,
     )
 
     draw.text(
-        (
-            start_x + droplet_size + gap,
-            y,
-        ),
+        (start_x + droplet_size + gap, y),
         text,
         font=font,
         fill=WEATHER_RAIN_COLOR,
     )
 
 
-def _draw_bottom_accent(
-    draw: ImageDraw.ImageDraw,
-) -> None:
+def _draw_bottom_accent(draw: ImageDraw.ImageDraw) -> None:
     """Draw a subtle finishing line below the weather details."""
 
     y = 104

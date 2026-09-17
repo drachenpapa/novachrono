@@ -13,9 +13,9 @@ from novachrono.dashboard import (
     render_panel,
 )
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
-from novachrono.pokemon_go import RaidRoster
+from novachrono.models.pokemon_go import RaidRoster
+from novachrono.models.weather import CurrentWeather
 from novachrono.units import TemperatureUnit
-from novachrono.weather import CurrentWeather
 
 BERLIN = ZoneInfo("Europe/Berlin")
 

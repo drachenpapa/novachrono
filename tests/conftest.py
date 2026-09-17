@@ -1,7 +1,7 @@
 import pytest
 
-from novachrono.pokemon_go import RaidBoss, RaidRoster
-from novachrono.weather import CurrentWeather, WeatherCondition
+from novachrono.models.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.weather import CurrentWeather, WeatherCondition
 
 
 @pytest.fixture

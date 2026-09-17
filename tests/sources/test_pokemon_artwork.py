@@ -5,7 +5,7 @@ from urllib.error import URLError
 import pytest
 from PIL import Image
 
-from novachrono.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import RaidBoss, RaidRoster
 from novachrono.sources.pokemon_artwork import fetch_raid_artwork
 
 
@@ -31,6 +31,28 @@ def test_fetch_raid_artwork_loads_and_trims_artwork() -> None:
     assert artwork_by_url[artwork_url].size == (2, 2)
 
 
+def test_fetch_raid_artwork_loads_shadow_five_star_artwork() -> None:
+    artwork_url = "https://example.com/giratina.png"
+
+    roster = RaidRoster(
+        five_star=(),
+        mega=(),
+        shadow_five_star=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+    )
+
+    with patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen:
+        mocked_urlopen.return_value = _create_response(_create_artwork_bytes())
+
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert list(artwork_by_url) == [artwork_url]
+    assert mocked_urlopen.call_count == 1
+
+
 def test_fetch_raid_artwork_loads_duplicate_url_only_once() -> None:
     artwork_url = "https://example.com/shared.png"
 
@@ -41,6 +63,11 @@ def test_fetch_raid_artwork_loads_duplicate_url_only_once() -> None:
             ),
         ),
         mega=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+        shadow_five_star=(
             _create_boss(
                 artwork_url=artwork_url,
             ),

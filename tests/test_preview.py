@@ -7,14 +7,14 @@ from PIL import Image
 
 from novachrono.dashboard import render_dashboard
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
-from novachrono.pokemon_go import RaidRoster
+from novachrono.models.pokemon_go import RaidRoster
+from novachrono.models.weather import CurrentWeather
 from novachrono.preview import (
     PREVIEW_GAP,
     PREVIEW_MARGIN,
     create_preview,
     save_preview,
 )
-from novachrono.weather import CurrentWeather
 
 BERLIN = ZoneInfo("Europe/Berlin")
 

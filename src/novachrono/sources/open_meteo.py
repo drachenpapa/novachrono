@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from novachrono.weather import CurrentWeather, WeatherCondition
+from novachrono.models.weather import CurrentWeather, WeatherCondition
 
 OPEN_METEO_API_URL: Final = "https://api.open-meteo.com/v1/forecast"
 DEFAULT_TIMEOUT_SECONDS: Final = 8.0

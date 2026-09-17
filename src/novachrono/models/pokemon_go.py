@@ -6,6 +6,7 @@ class RaidTier(StrEnum):
     """Raid tiers displayed by Novachrono."""
 
     FIVE_STAR = "five_star"
+    SHADOW_FIVE_STAR = "shadow_five_star"
     MEGA = "mega"
 
 
@@ -24,3 +25,4 @@ class RaidRoster:
 
     five_star: tuple[RaidBoss, ...]
     mega: tuple[RaidBoss, ...]
+    shadow_five_star: tuple[RaidBoss, ...] = ()

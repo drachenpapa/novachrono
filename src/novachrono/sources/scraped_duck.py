@@ -4,7 +4,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from novachrono.pokemon_go import RaidBoss, RaidRoster, RaidTier
+from novachrono.models.pokemon_go import RaidBoss, RaidRoster, RaidTier
 
 SCRAPED_DUCK_RAIDS_URL: Final = (
     "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.min.json"
@@ -21,7 +21,7 @@ def fetch_raid_roster(
     *,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> RaidRoster:
-    """Retrieve and normalize the current regular 5-star and Mega raid roster."""
+    """Retrieve and normalize current 5-star, Shadow 5-star, and Mega raids."""
 
     if timeout_seconds <= 0:
         raise ValueError("ScrapedDuck timeout must be greater than zero")
@@ -58,11 +58,10 @@ def fetch_raid_roster(
     return _parse_raid_roster(response_data)
 
 
-def _parse_raid_roster(
-    entries: list[Any],
-) -> RaidRoster:
+def _parse_raid_roster(entries: list[Any]) -> RaidRoster:
     five_star: list[RaidBoss] = []
     mega: list[RaidBoss] = []
+    shadow_five_star: list[RaidBoss] = []
 
     for entry in entries:
         if not isinstance(entry, dict):
@@ -70,12 +69,19 @@ def _parse_raid_roster(
 
         tier = _parse_raid_tier(entry.get("tier"))
 
-        if tier is None or _is_shadow_raid(entry):
+        if tier is None:
             continue
 
-        raid_boss = _parse_raid_boss(entry)
+        is_shadow = _is_shadow_raid(entry)
 
-        if tier is RaidTier.FIVE_STAR:
+        if is_shadow and tier is not RaidTier.FIVE_STAR:
+            continue
+
+        raid_boss = _parse_raid_boss(entry, strip_shadow_prefix=is_shadow)
+
+        if is_shadow:
+            shadow_five_star.append(raid_boss)
+        elif tier is RaidTier.FIVE_STAR:
             five_star.append(raid_boss)
         else:
             mega.append(raid_boss)
@@ -83,12 +89,11 @@ def _parse_raid_roster(
     return RaidRoster(
         five_star=tuple(five_star),
         mega=tuple(mega),
+        shadow_five_star=tuple(shadow_five_star),
     )
 
 
-def _parse_raid_tier(
-    value: Any,
-) -> RaidTier | None:
+def _parse_raid_tier(value: Any) -> RaidTier | None:
     if value in {"5-Star Raids", "Tier 5"}:
         return RaidTier.FIVE_STAR
 
@@ -98,9 +103,7 @@ def _parse_raid_tier(
     return None
 
 
-def _is_shadow_raid(
-    data: dict[str, Any],
-) -> bool:
+def _is_shadow_raid(data: dict[str, Any]) -> bool:
     name = data.get("name")
 
     if not isinstance(name, str):
@@ -111,12 +114,33 @@ def _is_shadow_raid(
 
 def _parse_raid_boss(
     data: dict[str, Any],
+    *,
+    strip_shadow_prefix: bool = False,
 ) -> RaidBoss:
+    name = _read_string(data, "name")
+
+    if strip_shadow_prefix:
+        name = _strip_shadow_prefix(name)
+
     return RaidBoss(
-        name=_read_string(data, "name"),
+        name=name,
         can_be_shiny=_read_boolean(data, "canBeShiny"),
         artwork_url=_read_optional_image_url(data, "image"),
     )
+
+
+def _strip_shadow_prefix(name: str) -> str:
+    normalized_name = name.strip()
+
+    if not normalized_name.casefold().startswith(SHADOW_RAID_PREFIX):
+        return normalized_name
+
+    stripped_name = normalized_name[len(SHADOW_RAID_PREFIX) :].strip()
+
+    if not stripped_name:
+        raise ScrapedDuckError("ScrapedDuck shadow raid contains an invalid 'name'")
+
+    return stripped_name
 
 
 def _read_string(

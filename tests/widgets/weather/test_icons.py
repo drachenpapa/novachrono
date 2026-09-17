@@ -2,7 +2,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from novachrono.design import PANEL_COLOR
-from novachrono.weather import WeatherCondition
+from novachrono.models.weather import WeatherCondition
 from novachrono.widgets.weather.icons import (
     draw_raindrop,
     draw_weather_icon_frame,

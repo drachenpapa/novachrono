@@ -4,14 +4,12 @@ import pytest
 from PIL import Image
 
 from novachrono.design import PANEL_SIZE
+from novachrono.models.weather import CurrentWeather, WeatherCondition
 from novachrono.units import TemperatureUnit
-from novachrono.weather import (
-    CurrentWeather,
-    WeatherCondition,
-)
 from novachrono.widgets.weather import (
     render_weather_animation,
     render_weather_panel,
+    weather_frame_duration_ms,
 )
 
 
@@ -254,6 +252,46 @@ def test_render_weather_animation_uses_expected_frame_count(
     )
 
     assert len(frames) == expected_frame_count
+
+
+@pytest.mark.parametrize(
+    ("condition", "expected_duration_ms"),
+    [
+        (
+            WeatherCondition.RAIN,
+            350,
+        ),
+        (
+            WeatherCondition.FOG,
+            500,
+        ),
+        (
+            WeatherCondition.CLEAR,
+            None,
+        ),
+        (
+            WeatherCondition.PARTLY_CLOUDY,
+            None,
+        ),
+        (
+            WeatherCondition.CLOUDY,
+            None,
+        ),
+        (
+            WeatherCondition.SNOW,
+            None,
+        ),
+        (
+            WeatherCondition.THUNDERSTORM,
+            None,
+        ),
+    ],
+)
+def test_weather_frame_duration_ms(
+    condition: WeatherCondition,
+    expected_duration_ms: int | None,
+) -> None:
+    assert weather_frame_duration_ms(condition) == expected_duration_ms
 
 
 @pytest.mark.parametrize(

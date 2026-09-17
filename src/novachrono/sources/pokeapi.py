@@ -5,7 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from novachrono.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import RaidBoss, RaidRoster
 
 POKEAPI_SPECIES_URL: Final = "https://pokeapi.co/api/v2/pokemon-species/{identifier}/"
 DEFAULT_TIMEOUT_SECONDS: Final = 8.0
@@ -46,14 +46,12 @@ def localize_raid_roster(
             except PokeApiError:
                 localized_names[boss.name] = boss.name
 
-        return replace(
-            boss,
-            name=localized_names[boss.name],
-        )
+        return replace(boss, name=localized_names[boss.name])
 
     return RaidRoster(
         five_star=tuple(localize_boss(boss) for boss in roster.five_star),
         mega=tuple(localize_boss(boss) for boss in roster.mega),
+        shadow_five_star=tuple(localize_boss(boss) for boss in roster.shadow_five_star),
     )
 
 
@@ -76,12 +74,7 @@ def fetch_localized_pokemon_name(
     species_name, is_mega, mega_form = _parse_display_name(name)
     identifier = _species_identifier(species_name)
 
-    url = POKEAPI_SPECIES_URL.format(
-        identifier=quote(
-            identifier,
-            safe="-",
-        )
-    )
+    url = POKEAPI_SPECIES_URL.format(identifier=quote(identifier, safe="-"))
 
     request = Request(
         url=url,
@@ -115,10 +108,7 @@ def fetch_localized_pokemon_name(
     if not isinstance(response_data, dict):
         raise PokeApiError("PokeAPI returned an unexpected response")
 
-    localized_name = _read_localized_name(
-        response_data,
-        language_code=language_code,
-    )
+    localized_name = _read_localized_name(response_data, language_code=language_code)
 
     if localized_name is None:
         return name
@@ -164,9 +154,7 @@ def _read_localized_name(
     return None
 
 
-def _parse_display_name(
-    name: str,
-) -> tuple[str, bool, str | None]:
+def _parse_display_name(name: str) -> tuple[str, bool, str | None]:
     normalized_name = name.strip()
 
     is_mega = normalized_name.casefold().startswith(("mega ", "mega-"))
@@ -189,7 +177,5 @@ def _parse_display_name(
     return normalized_name, is_mega, mega_form
 
 
-def _species_identifier(
-    name: str,
-) -> str:
+def _species_identifier(name: str) -> str:
     return name.casefold().replace("'", "").replace("\u2019", "").replace(".", "").replace(" ", "-")

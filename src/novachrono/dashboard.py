@@ -12,9 +12,9 @@ from novachrono.design import (
     draw_placeholder_header,
 )
 from novachrono.i18n import DEFAULT_LOCALE
-from novachrono.pokemon_go import RaidRoster
+from novachrono.models.pokemon_go import RaidRoster
+from novachrono.models.weather import CurrentWeather
 from novachrono.units import TemperatureUnit
-from novachrono.weather import CurrentWeather
 from novachrono.widgets.clock import render_clock_panel
 from novachrono.widgets.pokemon_go import render_raid_panel
 from novachrono.widgets.weather import render_weather_panel

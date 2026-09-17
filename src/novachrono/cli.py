@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Final, NoReturn
+from typing import Annotated, NoReturn
 
 import typer
 from PIL import Image
@@ -21,12 +21,23 @@ from novachrono.dashboard import (
     WEATHER_PANEL_INDEX,
     render_dashboard,
 )
+from novachrono.display_state import (
+    POKEMON_GO_STATE_PATH,
+    WEATHER_STATE_PATH,
+    StateError,
+    raid_roster_fingerprint,
+    read_fingerprint,
+    weather_fingerprint,
+    write_fingerprint,
+)
+from novachrono.models.pokemon_go import RaidRoster
+from novachrono.models.weather import CurrentWeather
+from novachrono.outputs.delivery import deliver_frames_with_retry
 from novachrono.outputs.times_gate import (
     TimesGateClient,
     TimesGateConfig,
     TimesGateError,
 )
-from novachrono.pokemon_go import RaidRoster
 from novachrono.preview import create_preview, save_preview
 from novachrono.sources.open_meteo import (
     OpenMeteoError,
@@ -38,15 +49,15 @@ from novachrono.sources.scraped_duck import (
     ScrapedDuckError,
     fetch_raid_roster,
 )
-from novachrono.weather import CurrentWeather, WeatherCondition
-from novachrono.widgets.clock import render_clock_animation
-from novachrono.widgets.pokemon_go import render_raid_animation
-from novachrono.widgets.weather import render_weather_animation
-
-CLOCK_FRAME_DURATION_MS: Final = 250
-POKEMON_GO_FRAME_DURATION_MS: Final = 10_000
-RAIN_FRAME_DURATION_MS: Final = 350
-FOG_FRAME_DURATION_MS: Final = 500
+from novachrono.widgets.clock import render_clock_panel
+from novachrono.widgets.pokemon_go import (
+    RAID_FRAME_DURATION_MS,
+    render_raid_animation,
+)
+from novachrono.widgets.weather import (
+    render_weather_animation,
+    weather_frame_duration_ms,
+)
 
 app = typer.Typer(
     name="novachrono",
@@ -70,6 +81,14 @@ TokenOption = Annotated[
         "--token",
         help="Override the Times Gate token configured with NOVACHRONO_TIMES_GATE_TOKEN.",
         metavar="TOKEN",
+    ),
+]
+
+ForceOption = Annotated[
+    bool,
+    typer.Option(
+        "--force",
+        help="Send even if the cached source state is unchanged.",
     ),
 ]
 
@@ -161,13 +180,13 @@ def send_clock(
         local_token=token,
     )
 
-    frames = render_clock_animation(datetime.now(app_config.timezone))
+    panel = render_clock_panel(datetime.now(app_config.timezone))
 
     _send_widget_frames(
         client=client,
         panel_index=CLOCK_PANEL_INDEX,
-        frames=frames,
-        frame_duration_ms=CLOCK_FRAME_DURATION_MS,
+        frames=(panel,),
+        frame_duration_ms=None,
         name="Clock",
     )
 
@@ -176,8 +195,9 @@ def send_clock(
 def send_weather(
     host: HostOption = None,
     token: TokenOption = None,
+    force: ForceOption = False,
 ) -> None:
-    """Retrieve, render, and send the weather panel."""
+    """Retrieve and send weather when the displayed state has changed."""
 
     app_config = _load_app_config()
 
@@ -189,6 +209,19 @@ def send_weather(
 
     weather = _load_current_weather(app_config)
 
+    fingerprint = weather_fingerprint(
+        weather,
+        locale=app_config.locale,
+        temperature_unit=app_config.temperature_unit,
+    )
+
+    if not force and _cached_fingerprint_matches(
+        WEATHER_STATE_PATH,
+        fingerprint,
+    ):
+        typer.echo("Weather unchanged; display update skipped.")
+        return
+
     frames = render_weather_animation(
         weather,
         locale=app_config.locale,
@@ -199,8 +232,13 @@ def send_weather(
         client=client,
         panel_index=WEATHER_PANEL_INDEX,
         frames=frames,
-        frame_duration_ms=_weather_frame_duration_ms(weather.condition),
+        frame_duration_ms=weather_frame_duration_ms(weather.condition),
         name="Weather",
+    )
+
+    _write_fingerprint_or_warn(
+        WEATHER_STATE_PATH,
+        fingerprint,
     )
 
 
@@ -208,8 +246,9 @@ def send_weather(
 def send_pokemon(
     host: HostOption = None,
     token: TokenOption = None,
+    force: ForceOption = False,
 ) -> None:
-    """Retrieve, render, and send the Pokémon GO raid panel."""
+    """Retrieve and send Pokémon GO raids when the roster has changed."""
 
     app_config = _load_app_config()
 
@@ -219,7 +258,25 @@ def send_pokemon(
         local_token=token,
     )
 
-    raid_roster = _load_raid_roster(app_config)
+    raw_raid_roster = _load_raw_raid_roster()
+
+    fingerprint = raid_roster_fingerprint(
+        raw_raid_roster,
+        locale=app_config.locale,
+    )
+
+    if not force and _cached_fingerprint_matches(
+        POKEMON_GO_STATE_PATH,
+        fingerprint,
+    ):
+        typer.echo("Pokémon GO raids unchanged; display update skipped.")
+        return
+
+    raid_roster = localize_raid_roster(
+        raw_raid_roster,
+        locale=app_config.locale,
+    )
+
     raid_artwork = fetch_raid_artwork(raid_roster)
 
     frames = render_raid_animation(
@@ -231,8 +288,13 @@ def send_pokemon(
         client=client,
         panel_index=POKEMON_GO_PANEL_INDEX,
         frames=frames,
-        frame_duration_ms=POKEMON_GO_FRAME_DURATION_MS,
+        frame_duration_ms=RAID_FRAME_DURATION_MS,
         name="Pokémon GO",
+    )
+
+    _write_fingerprint_or_warn(
+        POKEMON_GO_STATE_PATH,
+        fingerprint,
     )
 
 
@@ -252,8 +314,26 @@ def send_dashboard(
     )
 
     weather = _load_current_weather(app_config)
-    raid_roster = _load_raid_roster(app_config)
+
+    raw_raid_roster = _load_raw_raid_roster()
+
+    raid_roster = localize_raid_roster(
+        raw_raid_roster,
+        locale=app_config.locale,
+    )
+
     raid_artwork = fetch_raid_artwork(raid_roster)
+
+    weather_state = weather_fingerprint(
+        weather,
+        locale=app_config.locale,
+        temperature_unit=app_config.temperature_unit,
+    )
+
+    pokemon_go_state = raid_roster_fingerprint(
+        raw_raid_roster,
+        locale=app_config.locale,
+    )
 
     panels = render_dashboard(
         weather=weather,
@@ -263,8 +343,6 @@ def send_dashboard(
         locale=app_config.locale,
         temperature_unit=app_config.temperature_unit,
     )
-
-    clock_frames = render_clock_animation(datetime.now(app_config.timezone))
 
     weather_frames = render_weather_animation(
         weather,
@@ -284,17 +362,13 @@ def send_dashboard(
             int | None,
         ],
     ] = {
-        CLOCK_PANEL_INDEX: (
-            clock_frames,
-            CLOCK_FRAME_DURATION_MS,
-        ),
         WEATHER_PANEL_INDEX: (
             weather_frames,
-            _weather_frame_duration_ms(weather.condition),
+            weather_frame_duration_ms(weather.condition),
         ),
         POKEMON_GO_PANEL_INDEX: (
             pokemon_frames,
-            POKEMON_GO_FRAME_DURATION_MS,
+            RAID_FRAME_DURATION_MS,
         ),
     }
 
@@ -313,7 +387,7 @@ def send_dashboard(
         )
 
         try:
-            _deliver_frames(
+            deliver_frames_with_retry(
                 client=client,
                 panel_index=panel_index,
                 frames=frames,
@@ -330,6 +404,18 @@ def send_dashboard(
             continue
 
         typer.echo(f"Display {display_number} sent successfully.")
+
+        if panel_index == WEATHER_PANEL_INDEX:
+            _write_fingerprint_or_warn(
+                WEATHER_STATE_PATH,
+                weather_state,
+            )
+
+        elif panel_index == POKEMON_GO_PANEL_INDEX:
+            _write_fingerprint_or_warn(
+                POKEMON_GO_STATE_PATH,
+                pokemon_go_state,
+            )
 
     if failed_displays:
         formatted_displays = ", ".join(str(display_number) for display_number in failed_displays)
@@ -352,7 +438,7 @@ def _send_widget_frames(
     typer.echo(f"Sending {name.lower()} to display {display_number} ...")
 
     try:
-        responses = _deliver_frames(
+        responses = deliver_frames_with_retry(
             client=client,
             panel_index=panel_index,
             frames=frames,
@@ -375,48 +461,7 @@ def _send_widget_frames(
     )
 
 
-def _deliver_frames(
-    *,
-    client: TimesGateClient,
-    panel_index: int,
-    frames: tuple[Image.Image, ...],
-    frame_duration_ms: int | None,
-) -> tuple[dict[str, Any], ...]:
-    if len(frames) == 1:
-        response = client.send_image(
-            panel_index=panel_index,
-            image=frames[0],
-        )
-
-        return (response,)
-
-    if frame_duration_ms is None:
-        raise ValueError("Animated panel requires a frame duration")
-
-    return client.send_animation(
-        panel_index=panel_index,
-        images=frames,
-        frame_duration_ms=frame_duration_ms,
-    )
-
-
-def _weather_frame_duration_ms(
-    condition: WeatherCondition,
-) -> int | None:
-    match condition:
-        case WeatherCondition.RAIN:
-            return RAIN_FRAME_DURATION_MS
-
-        case WeatherCondition.FOG:
-            return FOG_FRAME_DURATION_MS
-
-        case _:
-            return None
-
-
-def _load_current_weather(
-    app_config: AppConfig,
-) -> CurrentWeather:
+def _load_current_weather(app_config: AppConfig) -> CurrentWeather:
     latitude = app_config.weather.latitude
     longitude = app_config.weather.longitude
 
@@ -443,18 +488,49 @@ def _load_current_weather(
         _exit_with_error(str(error))
 
 
-def _load_raid_roster(
-    app_config: AppConfig,
-) -> RaidRoster:
+def _load_raw_raid_roster() -> RaidRoster:
     try:
-        roster = fetch_raid_roster()
+        return fetch_raid_roster()
     except ScrapedDuckError as error:
         _exit_with_error(str(error))
 
+
+def _load_raid_roster(app_config: AppConfig) -> RaidRoster:
     return localize_raid_roster(
-        roster,
+        _load_raw_raid_roster(),
         locale=app_config.locale,
     )
+
+
+def _cached_fingerprint_matches(
+    path: Path,
+    fingerprint: str,
+) -> bool:
+    try:
+        return read_fingerprint(path) == fingerprint
+    except StateError as error:
+        typer.echo(
+            f"Warning: {error}",
+            err=True,
+        )
+
+        return False
+
+
+def _write_fingerprint_or_warn(
+    path: Path,
+    fingerprint: str,
+) -> None:
+    try:
+        write_fingerprint(
+            path,
+            fingerprint,
+        )
+    except StateError as error:
+        typer.echo(
+            f"Warning: {error}",
+            err=True,
+        )
 
 
 def _load_app_config() -> AppConfig:
@@ -520,9 +596,7 @@ def _resolve_value(
     return configured
 
 
-def _exit_with_error(
-    message: str,
-) -> NoReturn:
+def _exit_with_error(message: str) -> NoReturn:
     typer.echo(
         f"Error: {message}",
         err=True,

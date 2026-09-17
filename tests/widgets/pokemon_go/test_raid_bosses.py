@@ -3,7 +3,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from novachrono.design import PANEL_SIZE
-from novachrono.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import RaidBoss, RaidRoster
 from novachrono.widgets.pokemon_go import (
     render_raid_animation,
     render_raid_panel,
@@ -41,6 +41,26 @@ def test_render_raid_panel_supports_empty_roster() -> None:
         PANEL_SIZE,
         PANEL_SIZE,
     )
+
+
+def test_render_raid_panel_supports_shadow_five_star_only() -> None:
+    panel = render_raid_panel(
+        RaidRoster(
+            five_star=(),
+            mega=(),
+            shadow_five_star=(
+                _create_boss(
+                    name="Giratina",
+                ),
+            ),
+        )
+    )
+
+    assert panel.size == (
+        PANEL_SIZE,
+        PANEL_SIZE,
+    )
+    assert panel.mode == "RGB"
 
 
 def test_render_raid_panel_uses_provided_artwork() -> None:
@@ -95,7 +115,7 @@ def test_render_raid_animation_returns_single_frame_for_empty_roster() -> None:
     assert len(frames) == 1
 
 
-def test_render_raid_animation_rotates_all_bosses() -> None:
+def test_render_raid_animation_rotates_five_star_shadow_and_mega_bosses() -> None:
     five_star = (
         _create_boss(
             name="Five A",
@@ -103,8 +123,11 @@ def test_render_raid_animation_rotates_all_bosses() -> None:
         _create_boss(
             name="Five B",
         ),
+    )
+
+    shadow_five_star = (
         _create_boss(
-            name="Five C",
+            name="Shadow A",
         ),
     )
 
@@ -120,6 +143,7 @@ def test_render_raid_animation_rotates_all_bosses() -> None:
     roster = RaidRoster(
         five_star=five_star,
         mega=mega,
+        shadow_five_star=shadow_five_star,
     )
 
     with patch("novachrono.widgets.pokemon_go.raid_bosses.render_raid_panel") as mocked_render:
@@ -150,13 +174,62 @@ def test_render_raid_animation_rotates_all_bosses() -> None:
             mega=(mega[1],),
         ),
         RaidRoster(
-            five_star=(five_star[2],),
+            five_star=(),
             mega=(mega[0],),
+            shadow_five_star=(shadow_five_star[0],),
         ),
     ]
 
 
-def test_render_raid_animation_preserves_empty_tier() -> None:
+def test_render_raid_animation_rotates_multiple_shadow_bosses() -> None:
+    shadow_five_star = (
+        _create_boss(
+            name="Shadow A",
+        ),
+        _create_boss(
+            name="Shadow B",
+        ),
+    )
+
+    roster = RaidRoster(
+        five_star=(),
+        mega=(),
+        shadow_five_star=shadow_five_star,
+    )
+
+    with patch("novachrono.widgets.pokemon_go.raid_bosses.render_raid_panel") as mocked_render:
+        mocked_render.side_effect = (
+            Image.new(
+                "RGB",
+                (
+                    PANEL_SIZE,
+                    PANEL_SIZE,
+                ),
+            )
+            for _ in range(2)
+        )
+
+        frames = render_raid_animation(roster)
+
+    assert len(frames) == 2
+
+    rendered_rosters = [call.args[0] for call in mocked_render.call_args_list]
+
+    assert rendered_rosters == [
+        RaidRoster(
+            five_star=(),
+            mega=(),
+            shadow_five_star=(shadow_five_star[0],),
+        ),
+        RaidRoster(
+            five_star=(),
+            mega=(),
+            shadow_five_star=(shadow_five_star[1],),
+        ),
+    ]
+
+
+def test_render_raid_animation_preserves_empty_mega_tier() -> None:
     five_star = (
         _create_boss(
             name="Five A",
