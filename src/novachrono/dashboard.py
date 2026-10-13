@@ -12,42 +12,28 @@ from novachrono.design import (
     draw_placeholder_header,
 )
 from novachrono.i18n import DEFAULT_LOCALE
-from novachrono.models.pokemon_go import RaidRoster
+from novachrono.models.pokemon_go import EventSchedule, RaidRoster
 from novachrono.models.weather import CurrentWeather
 from novachrono.units import TemperatureUnit
 from novachrono.widgets.clock import render_clock_panel
-from novachrono.widgets.pokemon_go import render_raid_panel
+from novachrono.widgets.pokemon_go import render_event_panel, render_raid_panel
 from novachrono.widgets.weather import render_weather_panel
 
 DEFAULT_TIMEZONE = ZoneInfo(DEFAULT_TIMEZONE_NAME)
 
 WEATHER_PANEL_INDEX = 1
 CLOCK_PANEL_INDEX = 2
-POKEMON_GO_PANEL_INDEX = 3
-
-
-def render_panel(index: int) -> Image.Image:
-    """Render one static placeholder panel."""
-
-    if not 0 <= index < PANEL_COUNT:
-        raise ValueError(f"Panel index must be between 0 and {PANEL_COUNT - 1}")
-
-    image = create_panel()
-    draw = ImageDraw.Draw(image)
-
-    draw_placeholder_header(
-        draw,
-        accent_color=FRAME_ACCENT_COLOR,
-    )
-
-    return image
+RAID_PANEL_INDEX = 3
+EVENT_PANEL_INDEX = 4
 
 
 def render_dashboard(
     now: datetime | None = None,
     *,
     weather: CurrentWeather,
+    event_schedule: EventSchedule,
     raid_roster: RaidRoster,
+    event_artwork: Mapping[str, Image.Image] | None = None,
     raid_artwork: Mapping[str, Image.Image] | None = None,
     timezone: ZoneInfo = DEFAULT_TIMEZONE,
     locale: str = DEFAULT_LOCALE,
@@ -57,19 +43,26 @@ def render_dashboard(
 
     current_time = now if now is not None else datetime.now(timezone)
 
-    panels = [render_panel(index) for index in range(PANEL_COUNT)]
+    panels = [_render_placeholder_panel() for _ in range(PANEL_COUNT)]
 
+    panels[EVENT_PANEL_INDEX] = render_event_panel(
+        event_schedule, locale=locale, artwork_by_url=event_artwork
+    )
     panels[WEATHER_PANEL_INDEX] = render_weather_panel(
-        weather,
-        locale=locale,
-        temperature_unit=temperature_unit,
+        weather, locale=locale, temperature_unit=temperature_unit
     )
-
-    panels[CLOCK_PANEL_INDEX] = render_clock_panel(current_time)
-
-    panels[POKEMON_GO_PANEL_INDEX] = render_raid_panel(
-        raid_roster,
-        artwork_by_url=raid_artwork,
-    )
+    panels[CLOCK_PANEL_INDEX] = render_clock_panel(current_time, locale=locale)
+    panels[RAID_PANEL_INDEX] = render_raid_panel(raid_roster, artwork_by_url=raid_artwork)
 
     return tuple(panels)
+
+
+def _render_placeholder_panel() -> Image.Image:
+    """Render one static placeholder panel."""
+
+    image = create_panel()
+    draw = ImageDraw.Draw(image)
+
+    draw_placeholder_header(draw, accent_color=FRAME_ACCENT_COLOR)
+
+    return image

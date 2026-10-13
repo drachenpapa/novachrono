@@ -18,11 +18,7 @@ def create_preview(panels: Sequence[Image.Image]) -> Image.Image:
     width = PREVIEW_MARGIN * 2 + PANEL_COUNT * PANEL_SIZE + (PANEL_COUNT - 1) * PREVIEW_GAP
     height = PREVIEW_MARGIN * 2 + PANEL_SIZE
 
-    preview = Image.new(
-        mode="RGB",
-        size=(width, height),
-        color=BACKGROUND_COLOR,
-    )
+    preview = Image.new(mode="RGB", size=(width, height), color=BACKGROUND_COLOR)
 
     expected_size = (PANEL_SIZE, PANEL_SIZE)
 

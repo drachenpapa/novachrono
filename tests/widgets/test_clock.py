@@ -21,7 +21,10 @@ def test_render_clock_panel_returns_panel_image() -> None:
         )
     )
 
-    assert panel.size == (PANEL_SIZE, PANEL_SIZE)
+    assert panel.size == (
+        PANEL_SIZE,
+        PANEL_SIZE,
+    )
 
 
 def test_render_clock_panel_is_deterministic() -> None:
@@ -51,6 +54,7 @@ def test_render_clock_panel_changes_with_time() -> None:
             tzinfo=BERLIN,
         )
     )
+
     second = render_clock_panel(
         datetime(
             2026,
@@ -76,6 +80,7 @@ def test_render_clock_panel_changes_with_date() -> None:
             tzinfo=BERLIN,
         )
     )
+
     second = render_clock_panel(
         datetime(
             2026,
@@ -88,6 +93,29 @@ def test_render_clock_panel_changes_with_date() -> None:
     )
 
     assert first.tobytes() != second.tobytes()
+
+
+def test_render_clock_panel_changes_with_locale() -> None:
+    now = datetime(
+        2026,
+        9,
+        15,
+        20,
+        16,
+        tzinfo=BERLIN,
+    )
+
+    german = render_clock_panel(
+        now,
+        locale="de_DE",
+    )
+
+    english = render_clock_panel(
+        now,
+        locale="en_US",
+    )
+
+    assert german.tobytes() != english.tobytes()
 
 
 def test_render_clock_panel_requires_timezone_aware_datetime() -> None:

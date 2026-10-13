@@ -1,15 +1,27 @@
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from novachrono.display_state import (
+    event_schedule_fingerprint,
     raid_roster_fingerprint,
     read_fingerprint,
     weather_fingerprint,
     write_fingerprint,
 )
-from novachrono.models.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import (
+    EventSchedule,
+    PokemonGoEvent,
+    PokemonGoEventType,
+    PokemonGoFeaturedPokemon,
+    RaidBoss,
+    RaidRoster,
+)
 from novachrono.models.weather import CurrentWeather, WeatherCondition
 from novachrono.units import TemperatureUnit
+
+BERLIN = ZoneInfo("Europe/Berlin")
 
 
 def test_weather_fingerprint_is_deterministic() -> None:
@@ -129,6 +141,84 @@ def test_raid_roster_fingerprint_changes_when_locale_changes() -> None:
     )
 
 
+def test_event_schedule_fingerprint_is_deterministic() -> None:
+    schedule = _create_event_schedule()
+
+    first = event_schedule_fingerprint(
+        schedule,
+        locale="de_DE",
+    )
+
+    second = event_schedule_fingerprint(
+        schedule,
+        locale="de_DE",
+    )
+
+    assert first == second
+
+
+def test_event_schedule_fingerprint_changes_when_event_changes() -> None:
+    schedule = _create_event_schedule()
+
+    assert schedule.spotlight_hour is not None
+
+    changed_schedule = replace(
+        schedule,
+        spotlight_hour=replace(
+            schedule.spotlight_hour,
+            bonus="3\u00d7 Catch XP",
+        ),
+    )
+
+    assert event_schedule_fingerprint(
+        schedule,
+        locale="de_DE",
+    ) != event_schedule_fingerprint(
+        changed_schedule,
+        locale="de_DE",
+    )
+
+
+def test_event_schedule_fingerprint_changes_when_pokemon_changes() -> None:
+    schedule = _create_event_schedule()
+
+    assert schedule.spotlight_hour is not None
+
+    changed_schedule = replace(
+        schedule,
+        spotlight_hour=replace(
+            schedule.spotlight_hour,
+            featured_pokemon=(
+                PokemonGoFeaturedPokemon(
+                    name="Pikachu",
+                    can_be_shiny=True,
+                    artwork_url="https://example.com/pikachu.png",
+                ),
+            ),
+        ),
+    )
+
+    assert event_schedule_fingerprint(
+        schedule,
+        locale="de_DE",
+    ) != event_schedule_fingerprint(
+        changed_schedule,
+        locale="de_DE",
+    )
+
+
+def test_event_schedule_fingerprint_changes_when_locale_changes() -> None:
+    schedule = _create_event_schedule()
+
+    assert event_schedule_fingerprint(
+        schedule,
+        locale="de_DE",
+    ) != event_schedule_fingerprint(
+        schedule,
+        locale="en_US",
+    )
+
+
 def test_read_fingerprint_returns_none_for_missing_file(
     tmp_path: Path,
 ) -> None:
@@ -139,6 +229,7 @@ def test_read_fingerprint_returns_none_for_malformed_state(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "weather.state"
+
     path.write_text(
         "not-a-fingerprint",
         encoding="ascii",
@@ -195,4 +286,35 @@ def _create_raid_roster() -> RaidRoster:
                 artwork_url="https://example.com/mega-gengar.png",
             ),
         ),
+    )
+
+
+def _create_event_schedule() -> EventSchedule:
+    return EventSchedule(
+        spotlight_hour=PokemonGoEvent(
+            event_type=PokemonGoEventType.SPOTLIGHT_HOUR,
+            name="Rattata Spotlight Hour",
+            start=datetime(
+                2026,
+                10,
+                6,
+                18,
+                tzinfo=BERLIN,
+            ),
+            end=datetime(
+                2026,
+                10,
+                6,
+                19,
+                tzinfo=BERLIN,
+            ),
+            featured_pokemon=(
+                PokemonGoFeaturedPokemon(
+                    name="Rattata",
+                    can_be_shiny=True,
+                    artwork_url="https://example.com/rattata.png",
+                ),
+            ),
+            bonus="2\u00d7 Evolution XP",
+        )
     )

@@ -1,20 +1,23 @@
-import json
 from typing import Any, Final
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
-from novachrono.models.pokemon_go import RaidBoss, RaidRoster, RaidTier
+from novachrono.models.pokemon_go import (
+    RaidBoss,
+    RaidRoster,
+    RaidTier,
+)
+from novachrono.sources.scraped_duck._common import (
+    DEFAULT_TIMEOUT_SECONDS,
+    ScrapedDuckError,
+    _fetch_entries,
+    _read_optional_image_url,
+    _read_string,
+    _validate_timeout,
+)
 
 SCRAPED_DUCK_RAIDS_URL: Final = (
     "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.min.json"
 )
-DEFAULT_TIMEOUT_SECONDS: Final = 8.0
 SHADOW_RAID_PREFIX: Final = "shadow "
-
-
-class ScrapedDuckError(RuntimeError):
-    """Raised when ScrapedDuck Pokémon GO raid data cannot be retrieved."""
 
 
 def fetch_raid_roster(
@@ -23,39 +26,11 @@ def fetch_raid_roster(
 ) -> RaidRoster:
     """Retrieve and normalize current 5-star, Shadow 5-star, and Mega raids."""
 
-    if timeout_seconds <= 0:
-        raise ValueError("ScrapedDuck timeout must be greater than zero")
+    _validate_timeout(timeout_seconds)
 
-    request = Request(
-        url=SCRAPED_DUCK_RAIDS_URL,
-        headers={"Accept": "application/json"},
-        method="GET",
+    return _parse_raid_roster(
+        _fetch_entries(SCRAPED_DUCK_RAIDS_URL, timeout_seconds=timeout_seconds)
     )
-
-    try:
-        with urlopen(  # nosec B310 - fixed HTTPS endpoint
-            request,
-            timeout=timeout_seconds,
-        ) as response:
-            response_body = response.read().decode("utf-8")
-    except HTTPError as error:
-        raise ScrapedDuckError(f"ScrapedDuck returned HTTP {error.code}: {error.reason}") from error
-    except URLError as error:
-        raise ScrapedDuckError(f"Could not reach ScrapedDuck: {error.reason}") from error
-    except TimeoutError as error:
-        raise ScrapedDuckError("Connection to ScrapedDuck timed out") from error
-    except UnicodeDecodeError as error:
-        raise ScrapedDuckError("ScrapedDuck returned an invalid UTF-8 response") from error
-
-    try:
-        response_data = json.loads(response_body)
-    except json.JSONDecodeError as error:
-        raise ScrapedDuckError("ScrapedDuck returned invalid JSON") from error
-
-    if not isinstance(response_data, list):
-        raise ScrapedDuckError("ScrapedDuck returned an unexpected response")
-
-    return _parse_raid_roster(response_data)
 
 
 def _parse_raid_roster(entries: list[Any]) -> RaidRoster:
@@ -143,18 +118,6 @@ def _strip_shadow_prefix(name: str) -> str:
     return stripped_name
 
 
-def _read_string(
-    data: dict[str, Any],
-    name: str,
-) -> str:
-    value = data.get(name)
-
-    if not isinstance(value, str) or not value.strip():
-        raise ScrapedDuckError(f"ScrapedDuck raid contains invalid '{name}'")
-
-    return value.strip()
-
-
 def _read_boolean(
     data: dict[str, Any],
     name: str,
@@ -162,24 +125,6 @@ def _read_boolean(
     value = data.get(name)
 
     if not isinstance(value, bool):
-        raise ScrapedDuckError(f"ScrapedDuck raid contains invalid '{name}'")
+        raise ScrapedDuckError(f"ScrapedDuck data contains invalid '{name}'")
 
     return value
-
-
-def _read_optional_image_url(
-    data: dict[str, Any],
-    name: str,
-) -> str | None:
-    value = data.get(name)
-
-    if not isinstance(value, str):
-        return None
-
-    normalized_value = value.strip()
-    parsed_url = urlparse(normalized_value)
-
-    if parsed_url.scheme.casefold() != "https" or parsed_url.hostname is None:
-        return None
-
-    return normalized_value

@@ -72,7 +72,10 @@ def load_config(env_file: Path | None = None) -> AppConfig:
     if dotenv_path.is_file():
         file_values = dict(dotenv_values(dotenv_path))
 
-    values: dict[str, str | None] = {**file_values, **os.environ}
+    values: dict[str, str | None] = {
+        **file_values,
+        **os.environ,
+    }
 
     timezone_name = _read_optional_value(values, TIMEZONE_VARIABLE) or DEFAULT_TIMEZONE_NAME
 
@@ -109,6 +112,7 @@ def load_config(env_file: Path | None = None) -> AppConfig:
 
 def _read_weather_settings(values: Mapping[str, str | None]) -> WeatherSettings:
     latitude = _parse_optional_float(values, WEATHER_LATITUDE_VARIABLE)
+
     longitude = _parse_optional_float(values, WEATHER_LONGITUDE_VARIABLE)
 
     if (latitude is None) != (longitude is None):
@@ -120,10 +124,7 @@ def _read_weather_settings(values: Mapping[str, str | None]) -> WeatherSettings:
     if longitude is not None and not -180 <= longitude <= 180:
         raise ConfigError("Weather longitude must be between -180 and 180")
 
-    return WeatherSettings(
-        latitude=latitude,
-        longitude=longitude,
-    )
+    return WeatherSettings(latitude=latitude, longitude=longitude)
 
 
 def _parse_temperature_unit(value: str | None) -> TemperatureUnit:
@@ -135,8 +136,10 @@ def _parse_temperature_unit(value: str | None) -> TemperatureUnit:
     try:
         return _TEMPERATURE_UNIT_ALIASES[normalized_value]
     except KeyError as error:
+        supported = ", ".join(_TEMPERATURE_UNIT_ALIASES)
+
         raise ConfigError(
-            f"Unsupported temperature unit: {value}. Supported values: C, F"
+            f"Unsupported temperature unit: {value}. Supported values: {supported}"
         ) from error
 
 

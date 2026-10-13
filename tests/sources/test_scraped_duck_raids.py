@@ -51,7 +51,7 @@ def _create_raid(
     }
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_normalizes_relevant_raids(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -106,7 +106,7 @@ def test_fetch_raid_roster_normalizes_relevant_raids(
     )
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_separates_shadow_five_star_raids(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -149,7 +149,7 @@ def test_fetch_raid_roster_separates_shadow_five_star_raids(
     )
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_ignores_lower_tier_shadow_raids(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -177,7 +177,7 @@ def test_fetch_raid_roster_ignores_lower_tier_shadow_raids(
     assert roster.mega == ()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_rejects_insecure_artwork_url(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -196,7 +196,7 @@ def test_fetch_raid_roster_rejects_insecure_artwork_url(
     assert roster.five_star[0].artwork_url is None
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_preserves_multiple_bosses(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -234,7 +234,7 @@ def test_fetch_raid_roster_preserves_multiple_bosses(
     ]
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_accepts_legacy_tier_names(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -263,7 +263,7 @@ def test_fetch_raid_roster_accepts_legacy_tier_names(
     assert roster.shadow_five_star[0].name == "Legacy"
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_ignores_other_tiers(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -287,7 +287,7 @@ def test_fetch_raid_roster_ignores_other_tiers(
     assert roster.mega == ()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_rejects_invalid_relevant_boss(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -308,7 +308,7 @@ def test_fetch_raid_roster_rejects_invalid_relevant_boss(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_rejects_invalid_shadow_five_star_boss(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -329,7 +329,7 @@ def test_fetch_raid_roster_rejects_invalid_shadow_five_star_boss(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_reports_connection_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -342,7 +342,7 @@ def test_fetch_raid_roster_reports_connection_error(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_reports_http_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -361,7 +361,7 @@ def test_fetch_raid_roster_reports_http_error(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_reports_timeout(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -374,7 +374,7 @@ def test_fetch_raid_roster_reports_timeout(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_rejects_invalid_utf8(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -387,7 +387,7 @@ def test_fetch_raid_roster_rejects_invalid_utf8(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_rejects_invalid_json(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -400,7 +400,7 @@ def test_fetch_raid_roster_rejects_invalid_json(
         fetch_raid_roster()
 
 
-@patch("novachrono.sources.scraped_duck.urlopen")
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_rejects_non_list_response(
     mocked_urlopen: MagicMock,
 ) -> None:

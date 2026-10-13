@@ -75,9 +75,7 @@ def fetch_current_weather(
     return _parse_weather_response(response_data)
 
 
-def map_weather_code(
-    weather_code: int,
-) -> WeatherCondition:
+def map_weather_code(weather_code: int) -> WeatherCondition:
     """Map an Open-Meteo WMO weather code to a Novachrono condition."""
 
     if weather_code in {0, 1}:
@@ -123,59 +121,19 @@ def _build_request_url(
     return f"{OPEN_METEO_API_URL}?{urlencode(parameters)}"
 
 
-def _parse_weather_response(
-    response_data: dict[str, Any],
-) -> CurrentWeather:
-    current = _read_mapping(
-        response_data,
-        "current",
-    )
-
-    daily = _read_mapping(
-        response_data,
-        "daily",
-    )
-
-    weather_code = _read_integer(
-        current,
-        "weather_code",
-    )
-
-    temperature = round(
-        _read_number(
-            current,
-            "temperature_2m",
-        )
-    )
-
-    high_temperature = round(
-        _read_daily_number(
-            daily,
-            "temperature_2m_max",
-        )
-    )
-
-    low_temperature = round(
-        _read_daily_number(
-            daily,
-            "temperature_2m_min",
-        )
-    )
-
-    precipitation_probability = round(
-        _read_daily_number(
-            daily,
-            "precipitation_probability_max",
-        )
-    )
+def _parse_weather_response(response_data: dict[str, Any]) -> CurrentWeather:
+    current = _read_mapping(response_data, "current")
+    daily = _read_mapping(response_data, "daily")
+    weather_code = _read_integer(current, "weather_code")
+    temperature = round(_read_number(current, "temperature_2m"))
+    high_temperature = round(_read_daily_number(daily, "temperature_2m_max"))
+    low_temperature = round(_read_daily_number(daily, "temperature_2m_min"))
+    precipitation_probability = round(_read_daily_number(daily, "precipitation_probability_max"))
 
     if not 0 <= precipitation_probability <= 100:
         raise OpenMeteoError("Open-Meteo returned an invalid precipitation probability")
 
-    is_day_value = _read_integer(
-        current,
-        "is_day",
-    )
+    is_day_value = _read_integer(current, "is_day")
 
     if is_day_value not in {0, 1}:
         raise OpenMeteoError("Open-Meteo returned an invalid is_day value")
@@ -218,10 +176,7 @@ def _read_integer(
     data: dict[str, Any],
     name: str,
 ) -> int:
-    value = _read_number(
-        data,
-        name,
-    )
+    value = _read_number(data, name)
 
     if not value.is_integer():
         raise OpenMeteoError(f"Open-Meteo response contains invalid '{name}'")
@@ -246,16 +201,11 @@ def _read_daily_number(
     return float(first_value)
 
 
-def _format_http_error(
-    error: HTTPError,
-) -> str:
+def _format_http_error(error: HTTPError) -> str:
     try:
         response_body = error.read().decode("utf-8")
         response_data = json.loads(response_body)
-    except (
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-    ):
+    except UnicodeDecodeError, json.JSONDecodeError:
         response_data = None
 
     if isinstance(response_data, dict):

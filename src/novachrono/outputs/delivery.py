@@ -20,21 +20,18 @@ def deliver_frames(
 ) -> tuple[dict[str, Any], ...]:
     """Deliver a static panel or native multi-frame animation."""
 
-    if len(frames) == 1:
-        response = client.send_image(
-            panel_index=panel_index,
-            image=frames[0],
-        )
+    if not frames:
+        raise ValueError("Panel delivery requires at least one frame")
 
+    if len(frames) == 1:
+        response = client.send_image(panel_index=panel_index, image=frames[0])
         return (response,)
 
     if frame_duration_ms is None:
         raise ValueError("Animated panel requires a frame duration")
 
     return client.send_animation(
-        panel_index=panel_index,
-        images=frames,
-        frame_duration_ms=frame_duration_ms,
+        panel_index=panel_index, images=frames, frame_duration_ms=frame_duration_ms
     )
 
 

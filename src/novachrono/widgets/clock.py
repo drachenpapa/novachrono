@@ -13,6 +13,7 @@ from novachrono.design import (
     draw_centered_text,
     draw_widget_header,
 )
+from novachrono.i18n import DEFAULT_LOCALE
 
 CLOCK_TITLE: Final = "NOVACHRONO"
 
@@ -24,8 +25,17 @@ SEPARATOR_Y: Final = 82
 DATE_TOP: Final = 89
 DATE_FONT_SIZE: Final = 11
 
+_DATE_FORMATS: Final = {
+    "de_DE": "%d.%m.%Y",
+    "en_US": "%m/%d/%Y",
+}
 
-def render_clock_panel(now: datetime) -> Image.Image:
+
+def render_clock_panel(
+    now: datetime,
+    *,
+    locale: str = DEFAULT_LOCALE,
+) -> Image.Image:
     """Render the static Novachrono clock."""
 
     _validate_datetime(now)
@@ -33,11 +43,7 @@ def render_clock_panel(now: datetime) -> Image.Image:
     image = create_panel()
     draw = ImageDraw.Draw(image)
 
-    draw_widget_header(
-        draw,
-        title=CLOCK_TITLE,
-        font_size=11,
-    )
+    draw_widget_header(draw, title=CLOCK_TITLE, font_size=11)
 
     time_font = ImageFont.load_default(size=TIME_FONT_SIZE)
     date_font = ImageFont.load_default(size=DATE_FONT_SIZE)
@@ -51,15 +57,22 @@ def render_clock_panel(now: datetime) -> Image.Image:
     )
 
     draw.line(
-        (CONTENT_LEFT, SEPARATOR_Y, CONTENT_RIGHT, SEPARATOR_Y),
+        (
+            CONTENT_LEFT,
+            SEPARATOR_Y,
+            CONTENT_RIGHT,
+            SEPARATOR_Y,
+        ),
         fill=FRAME_DIM_COLOR,
         width=1,
     )
 
+    date_format = _DATE_FORMATS.get(locale, _DATE_FORMATS[DEFAULT_LOCALE])
+
     draw_centered_text(
         draw,
         y=DATE_TOP,
-        text=now.strftime("%d.%m.%Y"),
+        text=now.strftime(date_format),
         font=date_font,
         fill=MUTED_TEXT_COLOR,
     )

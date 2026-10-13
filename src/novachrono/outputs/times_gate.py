@@ -15,7 +15,6 @@ from novachrono.design import PANEL_COUNT, PANEL_SIZE
 DEFAULT_API_PORT: Final = 9000
 DEFAULT_API_PATH: Final = "/divoom_api"
 DEFAULT_TIMEOUT_SECONDS: Final = 8.0
-
 LOCAL_API_SCHEME: Final = "http"
 
 
@@ -50,17 +49,9 @@ class TimesGateConfig:
         if self.timeout_seconds <= 0:
             raise ValueError("Times Gate timeout must be greater than zero")
 
-        object.__setattr__(
-            self,
-            "host",
-            normalized_host,
-        )
+        object.__setattr__(self, "host", normalized_host)
 
-        object.__setattr__(
-            self,
-            "local_token",
-            self.local_token.strip(),
-        )
+        object.__setattr__(self, "local_token", self.local_token.strip())
 
     @property
     def api_url(self) -> str:
@@ -134,11 +125,7 @@ class TimesGateClient:
         """Send a native multi-frame animation to one Times Gate display."""
 
         _validate_panel_index(panel_index)
-
-        _validate_animation(
-            images,
-            frame_duration_ms=frame_duration_ms,
-        )
+        _validate_animation(images, frame_duration_ms=frame_duration_ms)
 
         lcd_array = _create_lcd_array(panel_index)
         picture_id = self._new_picture_id()
@@ -167,9 +154,7 @@ class TimesGateClient:
 
         return tuple(responses)
 
-    def _new_picture_id(
-        self,
-    ) -> int:
+    def _new_picture_id(self) -> int:
         picture_id = self._next_picture_id
         self._next_picture_id += 1
 
@@ -182,9 +167,7 @@ class TimesGateClient:
         request = Request(
             url=self._config.api_url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-            },
+            headers={"Content-Type": "application/json"},
             method="POST",
         )
 
@@ -214,10 +197,7 @@ class TimesGateClient:
         except json.JSONDecodeError as error:
             raise TimesGateError(f"Times Gate returned invalid JSON: {response_body!r}") from error
 
-        if not isinstance(
-            response_data,
-            dict,
-        ):
+        if not isinstance(response_data, dict):
             raise TimesGateError("Times Gate returned an unexpected response")
 
         _raise_for_api_error(response_data)
@@ -225,45 +205,29 @@ class TimesGateClient:
         return response_data
 
 
-def encode_image(
-    image: Image.Image,
-) -> str:
+def encode_image(image: Image.Image) -> str:
     """Encode a Pillow image as a Base64 JPEG."""
 
     buffer = io.BytesIO()
-
-    image.convert("RGB").save(
-        buffer,
-        format="JPEG",
-        quality=90,
-    )
+    image.convert("RGB").save(buffer, format="JPEG", quality=90)
 
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
-def _create_lcd_array(
-    panel_index: int,
-) -> list[int]:
+def _create_lcd_array(panel_index: int) -> list[int]:
     lcd_array = [0] * PANEL_COUNT
     lcd_array[panel_index] = 1
 
     return lcd_array
 
 
-def _validate_panel_index(
-    panel_index: int,
-) -> None:
+def _validate_panel_index(panel_index: int) -> None:
     if not 0 <= panel_index < PANEL_COUNT:
         raise ValueError(f"Panel index must be between 0 and {PANEL_COUNT - 1}")
 
 
-def _validate_image_size(
-    image: Image.Image,
-) -> None:
-    expected_size = (
-        PANEL_SIZE,
-        PANEL_SIZE,
-    )
+def _validate_image_size(image: Image.Image) -> None:
+    expected_size = (PANEL_SIZE, PANEL_SIZE)
 
     if image.size != expected_size:
         raise ValueError(f"Image has size {image.size}; expected {expected_size}")
@@ -284,26 +248,14 @@ def _validate_animation(
         _validate_image_size(image)
 
 
-def _raise_for_api_error(
-    response_data: dict[str, Any],
-) -> None:
-    return_code = response_data.get(
-        "ReturnCode",
-        response_data.get("error_code"),
-    )
+def _raise_for_api_error(response_data: dict[str, Any]) -> None:
+    return_code = response_data.get("ReturnCode", response_data.get("error_code"))
 
-    if return_code in (
-        None,
-        0,
-    ):
+    if return_code in (None, 0):
         return
 
     message = response_data.get(
-        "ReturnMessage",
-        response_data.get(
-            "error_message",
-            "unknown error",
-        ),
+        "ReturnMessage", response_data.get("error_message", "unknown error")
     )
 
     raise TimesGateError(f"Times Gate rejected the request with code {return_code}: {message}")

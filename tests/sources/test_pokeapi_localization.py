@@ -1,14 +1,26 @@
 import json
+from datetime import datetime
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from novachrono.models.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import (
+    EventSchedule,
+    PokemonGoEvent,
+    PokemonGoEventType,
+    PokemonGoFeaturedPokemon,
+    RaidBoss,
+    RaidRoster,
+)
 from novachrono.sources.pokeapi import (
     PokeApiError,
     fetch_localized_pokemon_name,
+    localize_event_schedule,
     localize_raid_roster,
 )
+
+BERLIN = ZoneInfo("Europe/Berlin")
 
 
 def _create_response(
@@ -36,6 +48,25 @@ def _create_response(
     )
 
 
+def _create_species_response(
+    german_name: str,
+) -> MagicMock:
+    return _create_raw_response(
+        json.dumps(
+            {
+                "names": [
+                    {
+                        "language": {
+                            "name": "de",
+                        },
+                        "name": german_name,
+                    }
+                ]
+            }
+        )
+    )
+
+
 def _create_raw_response(
     body: str,
 ) -> MagicMock:
@@ -55,7 +86,69 @@ def _create_bytes_response(
     return context_manager
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+def _create_schedule(
+    *pokemon: PokemonGoFeaturedPokemon,
+) -> EventSchedule:
+    return EventSchedule(
+        community_day=PokemonGoEvent(
+            event_type=PokemonGoEventType.COMMUNITY_DAY,
+            name="Test Community Day",
+            start=datetime(
+                2026,
+                10,
+                10,
+                14,
+                tzinfo=BERLIN,
+            ),
+            end=datetime(
+                2026,
+                10,
+                10,
+                17,
+                tzinfo=BERLIN,
+            ),
+            featured_pokemon=pokemon,
+        )
+    )
+
+
+def _create_roster(
+    *,
+    five_star_name: str,
+    mega_name: str,
+    shadow_five_star_name: str | None = None,
+) -> RaidRoster:
+    shadow_five_star = ()
+
+    if shadow_five_star_name is not None:
+        shadow_five_star = (
+            RaidBoss(
+                name=shadow_five_star_name,
+                can_be_shiny=True,
+                artwork_url="https://example.com/giratina.png",
+            ),
+        )
+
+    return RaidRoster(
+        five_star=(
+            RaidBoss(
+                name=five_star_name,
+                can_be_shiny=True,
+                artwork_url="https://example.com/mesprit.png",
+            ),
+        ),
+        mega=(
+            RaidBoss(
+                name=mega_name,
+                can_be_shiny=True,
+                artwork_url="https://example.com/mega-blaziken.png",
+            ),
+        ),
+        shadow_five_star=shadow_five_star,
+    )
+
+
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_fetch_localized_pokemon_name_returns_german_name(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -73,7 +166,7 @@ def test_fetch_localized_pokemon_name_returns_german_name(
     assert "/pokemon-species/uxie/" in request.full_url
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_fetch_localized_mega_name(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -91,7 +184,7 @@ def test_fetch_localized_mega_name(
     assert "/pokemon-species/blaziken/" in request.full_url
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_fetch_localized_mega_form_name(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -109,7 +202,7 @@ def test_fetch_localized_mega_form_name(
     assert "/pokemon-species/charizard/" in request.full_url
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_fetch_localized_pokemon_name_uses_original_for_unsupported_locale(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -122,7 +215,7 @@ def test_fetch_localized_pokemon_name_uses_original_for_unsupported_locale(
     mocked_urlopen.assert_not_called()
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_fetch_localized_pokemon_name_uses_original_when_translation_is_missing(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -149,7 +242,7 @@ def test_fetch_localized_pokemon_name_uses_original_when_translation_is_missing(
     assert name == "Uxie"
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_localize_raid_roster_keeps_english_without_request(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -168,7 +261,7 @@ def test_localize_raid_roster_keeps_english_without_request(
     mocked_urlopen.assert_not_called()
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_localize_raid_roster_preserves_boss_data(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -208,7 +301,7 @@ def test_localize_raid_roster_preserves_boss_data(
     )
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_localize_raid_roster_localizes_same_name_only_once(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -233,10 +326,11 @@ def test_localize_raid_roster_localizes_same_name_only_once(
     assert localized.five_star[0].name == "Vesprit"
     assert localized.mega[0].name == "Vesprit"
     assert localized.shadow_five_star[0].name == "Vesprit"
+
     assert mocked_urlopen.call_count == 1
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_localize_raid_roster_falls_back_when_api_fails(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -256,6 +350,106 @@ def test_localize_raid_roster_falls_back_when_api_fails(
     assert localized == roster
 
 
+@patch("novachrono.sources.pokeapi._common.urlopen")
+def test_localize_event_schedule_localizes_featured_pokemon(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_species_response("Memmeon")
+
+    schedule = _create_schedule(
+        PokemonGoFeaturedPokemon(
+            name="Sobble",
+            can_be_shiny=True,
+            artwork_url="https://example.com/sobble.png",
+        )
+    )
+
+    localized = localize_event_schedule(
+        schedule,
+        locale="de_DE",
+    )
+
+    assert localized.community_day is not None
+
+    pokemon = localized.community_day.featured_pokemon[0]
+
+    assert pokemon.name == "Memmeon"
+    assert pokemon.can_be_shiny is True
+    assert pokemon.artwork_url == "https://example.com/sobble.png"
+
+
+@patch("novachrono.sources.pokeapi._common.urlopen")
+def test_localize_event_schedule_keeps_english_without_request(
+    mocked_urlopen: MagicMock,
+) -> None:
+    schedule = _create_schedule(PokemonGoFeaturedPokemon(name="Sobble"))
+
+    assert (
+        localize_event_schedule(
+            schedule,
+            locale="en_US",
+        )
+        == schedule
+    )
+
+    mocked_urlopen.assert_not_called()
+
+
+@patch("novachrono.sources.pokeapi._common.urlopen")
+def test_localize_event_schedule_caches_duplicate_names(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_species_response("Memmeon")
+
+    schedule = EventSchedule(
+        community_day=_create_schedule(PokemonGoFeaturedPokemon(name="Sobble")).community_day,
+        max_monday=PokemonGoEvent(
+            event_type=PokemonGoEventType.MAX_MONDAY,
+            name="Dynamax Sobble during Max Monday",
+            start=datetime(
+                2026,
+                10,
+                12,
+                6,
+                tzinfo=BERLIN,
+            ),
+            end=datetime(
+                2026,
+                10,
+                12,
+                21,
+                tzinfo=BERLIN,
+            ),
+            featured_pokemon=(PokemonGoFeaturedPokemon(name="Sobble"),),
+        ),
+    )
+
+    localize_event_schedule(
+        schedule,
+        locale="de_DE",
+    )
+
+    assert mocked_urlopen.call_count == 1
+
+
+@patch("novachrono.sources.pokeapi._common.urlopen")
+def test_localize_event_schedule_preserves_alolan_form(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_species_response("Sandan")
+
+    schedule = _create_schedule(PokemonGoFeaturedPokemon(name="Sandshrew (Alolan)"))
+
+    localized = localize_event_schedule(
+        schedule,
+        locale="de_DE",
+    )
+
+    assert localized.community_day is not None
+
+    assert localized.community_day.featured_pokemon[0].name == "Alola-Sandan"
+
+
 def test_fetch_localized_pokemon_name_rejects_invalid_timeout() -> None:
     with pytest.raises(
         ValueError,
@@ -268,7 +462,7 @@ def test_fetch_localized_pokemon_name_rejects_invalid_timeout() -> None:
         )
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_invalid_utf8_raises_poke_api_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -284,7 +478,7 @@ def test_invalid_utf8_raises_poke_api_error(
         )
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_invalid_json_raises_poke_api_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -300,7 +494,7 @@ def test_invalid_json_raises_poke_api_error(
         )
 
 
-@patch("novachrono.sources.pokeapi.urlopen")
+@patch("novachrono.sources.pokeapi._common.urlopen")
 def test_unexpected_json_structure_raises_poke_api_error(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -314,39 +508,3 @@ def test_unexpected_json_structure_raises_poke_api_error(
             "Uxie",
             locale="de_DE",
         )
-
-
-def _create_roster(
-    *,
-    five_star_name: str,
-    mega_name: str,
-    shadow_five_star_name: str | None = None,
-) -> RaidRoster:
-    shadow_five_star = ()
-
-    if shadow_five_star_name is not None:
-        shadow_five_star = (
-            RaidBoss(
-                name=shadow_five_star_name,
-                can_be_shiny=True,
-                artwork_url="https://example.com/giratina.png",
-            ),
-        )
-
-    return RaidRoster(
-        five_star=(
-            RaidBoss(
-                name=five_star_name,
-                can_be_shiny=True,
-                artwork_url="https://example.com/mesprit.png",
-            ),
-        ),
-        mega=(
-            RaidBoss(
-                name=mega_name,
-                can_be_shiny=True,
-                artwork_url="https://example.com/mega-blaziken.png",
-            ),
-        ),
-        shadow_five_star=shadow_five_star,
-    )

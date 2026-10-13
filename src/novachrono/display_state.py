@@ -5,20 +5,45 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Final
 
-from novachrono.models.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import (
+    EventSchedule,
+    PokemonGoEvent,
+    PokemonGoFeaturedPokemon,
+    RaidBoss,
+    RaidRoster,
+)
 from novachrono.models.weather import CurrentWeather
 from novachrono.units import TemperatureUnit
 
 STATE_DIRECTORY: Final = Path.home() / ".novachrono"
+EVENT_STATE_PATH: Final = STATE_DIRECTORY / "events.state"
 WEATHER_STATE_PATH: Final = STATE_DIRECTORY / "weather.state"
-POKEMON_GO_STATE_PATH: Final = STATE_DIRECTORY / "pokemon-go.state"
-
+RAID_STATE_PATH: Final = STATE_DIRECTORY / "raids.state"
 FINGERPRINT_VERSION: Final = 1
 _HEX_CHARACTERS: Final = frozenset("0123456789abcdefABCDEF")
 
 
 class StateError(RuntimeError):
     """Raised when persistent Novachrono state cannot be accessed."""
+
+
+def event_schedule_fingerprint(
+    schedule: EventSchedule,
+    *,
+    locale: str,
+) -> str:
+    """Create a fingerprint for rendering-relevant event state."""
+
+    return _fingerprint(
+        {
+            "version": FINGERPRINT_VERSION,
+            "locale": locale,
+            "community_day": _event_payload(schedule.community_day),
+            "community_day_classic": _event_payload(schedule.community_day_classic),
+            "spotlight_hour": _event_payload(schedule.spotlight_hour),
+            "max_monday": _event_payload(schedule.max_monday),
+        }
+    )
 
 
 def weather_fingerprint(
@@ -69,9 +94,7 @@ def read_fingerprint(path: Path) -> str | None:
     """
 
     try:
-        value = path.read_text(
-            encoding="ascii",
-        ).strip()
+        value = path.read_text(encoding="ascii").strip()
     except FileNotFoundError:
         return None
     except UnicodeError:
@@ -94,15 +117,11 @@ def write_fingerprint(
     if not _is_valid_fingerprint(fingerprint):
         raise ValueError("State fingerprint must be a SHA-256 hexadecimal digest")
 
-    temporary_path = path.with_name(
-        f".{path.name}.{os.getpid()}.tmp",
-    )
+    temporary_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-
         temporary_path.write_text(f"{fingerprint.lower()}\n", encoding="ascii")
-
         temporary_path.replace(path)
     except OSError as error:
         with suppress(OSError):
@@ -120,6 +139,30 @@ def _fingerprint(payload: object) -> str:
     )
 
     return sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _event_payload(event: PokemonGoEvent | None) -> dict[str, object] | None:
+    if event is None:
+        return None
+
+    return {
+        "event_type": event.event_type.value,
+        "name": event.name,
+        "start": event.start.isoformat(),
+        "end": event.end.isoformat(),
+        "featured_pokemon": [
+            _featured_pokemon_payload(pokemon) for pokemon in event.featured_pokemon
+        ],
+        "bonus": event.bonus,
+    }
+
+
+def _featured_pokemon_payload(pokemon: PokemonGoFeaturedPokemon) -> dict[str, str | bool | None]:
+    return {
+        "name": pokemon.name,
+        "can_be_shiny": pokemon.can_be_shiny,
+        "artwork_url": pokemon.artwork_url,
+    }
 
 
 def _raid_boss_payload(boss: RaidBoss) -> dict[str, str | bool | None]:

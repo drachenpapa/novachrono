@@ -7,7 +7,7 @@ from PIL import Image
 
 from novachrono.dashboard import render_dashboard
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
-from novachrono.models.pokemon_go import RaidRoster
+from novachrono.models.pokemon_go import EventSchedule, RaidRoster
 from novachrono.models.weather import CurrentWeather
 from novachrono.preview import (
     PREVIEW_GAP,
@@ -32,10 +32,12 @@ FIXED_TIME = datetime(
 def dashboard(
     weather: CurrentWeather,
     raid_roster: RaidRoster,
+    event_schedule: EventSchedule,
 ) -> tuple[Image.Image, ...]:
     return render_dashboard(
         FIXED_TIME,
         weather=weather,
+        event_schedule=event_schedule,
         raid_roster=raid_roster,
     )
 

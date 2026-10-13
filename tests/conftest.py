@@ -1,7 +1,19 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 
-from novachrono.models.pokemon_go import RaidBoss, RaidRoster
+from novachrono.models.pokemon_go import (
+    EventSchedule,
+    PokemonGoEvent,
+    PokemonGoEventType,
+    PokemonGoFeaturedPokemon,
+    RaidBoss,
+    RaidRoster,
+)
 from novachrono.models.weather import CurrentWeather, WeatherCondition
+
+BERLIN = ZoneInfo("Europe/Berlin")
 
 
 @pytest.fixture
@@ -37,4 +49,38 @@ def raid_roster() -> RaidRoster:
                 artwork_url="https://example.com/mega-gengar.png",
             ),
         ),
+    )
+
+
+@pytest.fixture
+def event_schedule() -> EventSchedule:
+    """Standard single-frame Pokémon GO event schedule."""
+
+    return EventSchedule(
+        spotlight_hour=PokemonGoEvent(
+            event_type=PokemonGoEventType.SPOTLIGHT_HOUR,
+            name="Rattata Spotlight Hour",
+            start=datetime(
+                2026,
+                10,
+                6,
+                18,
+                tzinfo=BERLIN,
+            ),
+            end=datetime(
+                2026,
+                10,
+                6,
+                19,
+                tzinfo=BERLIN,
+            ),
+            featured_pokemon=(
+                PokemonGoFeaturedPokemon(
+                    name="Rattata",
+                    can_be_shiny=True,
+                    artwork_url="https://example.com/rattata.png",
+                ),
+            ),
+            bonus="2\u00d7 Evolution XP",
+        )
     )

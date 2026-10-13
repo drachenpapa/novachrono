@@ -80,6 +80,24 @@ def test_deliver_frames_sends_multiple_frames_as_animation() -> None:
     client.send_image.assert_not_called()
 
 
+def test_deliver_frames_rejects_empty_frames() -> None:
+    client = MagicMock()
+
+    with pytest.raises(
+        ValueError,
+        match="Panel delivery requires at least one frame",
+    ):
+        deliver_frames(
+            client=client,
+            panel_index=1,
+            frames=(),
+            frame_duration_ms=None,
+        )
+
+    client.send_image.assert_not_called()
+    client.send_animation.assert_not_called()
+
+
 def test_deliver_frames_requires_duration_for_animation() -> None:
     with pytest.raises(
         ValueError,

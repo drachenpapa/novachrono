@@ -20,12 +20,7 @@ from novachrono.design.theme import (
 def create_panel() -> Image.Image:
     """Create an empty Novachrono panel with its shared HUD frame."""
 
-    image = Image.new(
-        mode="RGB",
-        size=(PANEL_SIZE, PANEL_SIZE),
-        color=PANEL_COLOR,
-    )
-
+    image = Image.new(mode="RGB", size=(PANEL_SIZE, PANEL_SIZE), color=PANEL_COLOR)
     draw = ImageDraw.Draw(image)
     _draw_hud_frame(draw)
 
@@ -46,36 +41,20 @@ def draw_widget_header(
 
     title_width = bounding_box[2] - bounding_box[0]
     title_x = (PANEL_SIZE - title_width) // 2 - bounding_box[0]
-
-    draw.text(
-        (title_x, HEADER_TOP),
-        title,
-        font=title_font,
-        fill=TEXT_COLOR,
-    )
+    draw.text((title_x, HEADER_TOP), title, font=title_font, fill=TEXT_COLOR)
 
     line_gap = 5
     left_line_end = title_x - line_gap
     right_line_start = title_x + title_width + line_gap
 
     draw.line(
-        (
-            CONTENT_LEFT,
-            HEADER_DIVIDER_Y,
-            max(CONTENT_LEFT, left_line_end),
-            HEADER_DIVIDER_Y,
-        ),
+        (CONTENT_LEFT, HEADER_DIVIDER_Y, max(CONTENT_LEFT, left_line_end), HEADER_DIVIDER_Y),
         fill=accent_color,
         width=1,
     )
 
     draw.line(
-        (
-            min(CONTENT_RIGHT, right_line_start),
-            HEADER_DIVIDER_Y,
-            CONTENT_RIGHT,
-            HEADER_DIVIDER_Y,
-        ),
+        (min(CONTENT_RIGHT, right_line_start), HEADER_DIVIDER_Y, CONTENT_RIGHT, HEADER_DIVIDER_Y),
         fill=accent_color,
         width=1,
     )
@@ -88,23 +67,9 @@ def draw_placeholder_header(
 ) -> None:
     """Draw a minimal placeholder indicator."""
 
-    draw.line(
-        (18, 26, 39, 26),
-        fill=accent_color,
-        width=2,
-    )
-
-    draw.line(
-        (61, 64, 67, 64),
-        fill=SUBTLE_TEXT_COLOR,
-        width=1,
-    )
-
-    draw.line(
-        (64, 61, 64, 67),
-        fill=SUBTLE_TEXT_COLOR,
-        width=1,
-    )
+    draw.line((18, 26, 39, 26), fill=accent_color, width=2)
+    draw.line((61, 64, 67, 64), fill=SUBTLE_TEXT_COLOR, width=1)
+    draw.line((64, 61, 64, 67), fill=SUBTLE_TEXT_COLOR, width=1)
 
 
 def draw_centered_text(
@@ -118,21 +83,10 @@ def draw_centered_text(
 ) -> None:
     """Draw horizontally centered text."""
 
-    bounding_box = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-    )
-
+    bounding_box = draw.textbbox((0, 0), text, font=font)
     rendered_width = bounding_box[2] - bounding_box[0]
     x = (PANEL_SIZE - rendered_width) // 2 - bounding_box[0] + offset_x
-
-    draw.text(
-        (x, y),
-        text,
-        font=font,
-        fill=fill,
-    )
+    draw.text((x, y), text, font=font, fill=fill)
 
 
 def find_font_that_fits(
@@ -147,14 +101,7 @@ def find_font_that_fits(
     for font_size in font_sizes:
         font = ImageFont.load_default(size=font_size)
 
-        if (
-            text_width(
-                draw,
-                text=text,
-                font=font,
-            )
-            <= maximum_width
-        ):
+        if text_width(draw, text=text, font=font) <= maximum_width:
             return font
 
     return ImageFont.load_default(size=font_sizes[-1])
@@ -168,11 +115,7 @@ def text_width(
 ) -> int:
     """Measure rendered text width."""
 
-    bounding_box = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-    )
+    bounding_box = draw.textbbox((0, 0), text, font=font)
 
     return bounding_box[2] - bounding_box[0]
 
@@ -191,11 +134,7 @@ def _draw_hud_frame(draw: ImageDraw.ImageDraw) -> None:
         (8, 16),
     ]
 
-    draw.line(
-        [*outer_points, outer_points[0]],
-        fill=FRAME_LINE_COLOR,
-        width=1,
-    )
+    draw.line([*outer_points, outer_points[0]], fill=FRAME_LINE_COLOR, width=1)
 
     inner_points = [
         (20, 12),
@@ -208,11 +147,7 @@ def _draw_hud_frame(draw: ImageDraw.ImageDraw) -> None:
         (12, 20),
     ]
 
-    draw.line(
-        [*inner_points, inner_points[0]],
-        fill=FRAME_ACCENT_COLOR,
-        width=1,
-    )
+    draw.line([*inner_points, inner_points[0]], fill=FRAME_ACCENT_COLOR, width=1)
 
     depth_points = [
         (23, 15),
@@ -225,23 +160,9 @@ def _draw_hud_frame(draw: ImageDraw.ImageDraw) -> None:
         (15, 23),
     ]
 
-    draw.line(
-        [*depth_points, depth_points[0]],
-        fill=FRAME_DEEP_COLOR,
-        width=1,
-    )
-
-    draw.line(
-        (46, 10, 82, 10),
-        fill=FRAME_BRIGHT_COLOR,
-        width=2,
-    )
-
-    draw.line(
-        (53, 118, 75, 118),
-        fill=FRAME_ACCENT_COLOR,
-        width=2,
-    )
+    draw.line([*depth_points, depth_points[0]], fill=FRAME_DEEP_COLOR, width=1)
+    draw.line((46, 10, 82, 10), fill=FRAME_BRIGHT_COLOR, width=2)
+    draw.line((53, 118, 75, 118), fill=FRAME_ACCENT_COLOR, width=2)
 
     for line in (
         (17, 17, 30, 17),
@@ -249,8 +170,4 @@ def _draw_hud_frame(draw: ImageDraw.ImageDraw) -> None:
         (17, 111, 30, 111),
         (98, 111, 111, 111),
     ):
-        draw.line(
-            line,
-            fill=FRAME_ACCENT_COLOR,
-            width=1,
-        )
+        draw.line(line, fill=FRAME_ACCENT_COLOR, width=1)
