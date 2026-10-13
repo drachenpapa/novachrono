@@ -68,7 +68,7 @@ def test_fetch_event_schedule_parses_supported_events(
                         "spawns": [
                             {
                                 "name": "Zorua",
-                                "image": "https://example.com/zorua.png",
+                                "image": ("https://example.com/zorua.png"),
                             }
                         ],
                         "shinies": [
@@ -78,34 +78,34 @@ def test_fetch_event_schedule_parses_supported_events(
                         ],
                         "bonuses": [
                             {
-                                "text": "Increased Spawns",
+                                "text": ("Increased Spawns"),
                             },
                             {
-                                "text": "3\u00d7 Catch XP",
+                                "text": ("3\u00d7 Catch XP"),
                             },
                         ],
                     }
                 },
             ),
             _create_event(
-                name="Rattata Spotlight Hour",
-                event_type="pokemon-spotlight-hour",
-                start="2026-09-24T18:00:00",
-                end="2026-09-24T19:00:00",
+                name=("Rattata Spotlight Hour"),
+                event_type=("pokemon-spotlight-hour"),
+                start=("2026-09-24T18:00:00"),
+                end=("2026-09-24T19:00:00"),
                 extra_data={
                     "spotlight": {
                         "name": "Rattata",
                         "canBeShiny": True,
-                        "image": "https://example.com/rattata.png",
-                        "bonus": "2\u00d7 Evolution XP",
+                        "image": ("https://example.com/rattata.png"),
+                        "bonus": ("2\u00d7 Evolution XP"),
                     }
                 },
             ),
             _create_event(
-                name="Dynamax Sobble during Max Monday",
+                name=("Dynamax Sobble during Max Monday"),
                 event_type="max-mondays",
-                start="2026-09-28T06:00:00",
-                end="2026-09-28T21:00:00",
+                start=("2026-09-28T06:00:00"),
+                end=("2026-09-28T21:00:00"),
             ),
         ]
     )
@@ -144,10 +144,10 @@ def test_fetch_event_schedule_detects_community_day_classic(
     mocked_urlopen.return_value = _create_response(
         [
             _create_event(
-                name="Bulbasaur Community Day Classic",
+                name=("Bulbasaur Community Day Classic"),
                 event_type="community-day",
-                start="2026-10-17T14:00:00",
-                end="2026-10-17T17:00:00",
+                start=("2026-10-17T14:00:00"),
+                end=("2026-10-17T17:00:00"),
             )
         ]
     )
@@ -163,6 +163,7 @@ def test_fetch_event_schedule_detects_community_day_classic(
     )
 
     assert schedule.community_day is None
+
     assert schedule.community_day_classic is not None
 
     assert schedule.community_day_classic.event_type is PokemonGoEventType.COMMUNITY_DAY_CLASSIC
@@ -177,18 +178,18 @@ def test_fetch_event_schedule_preserves_multiple_community_day_pokemon(
     mocked_urlopen.return_value = _create_response(
         [
             _create_event(
-                name="Sandshrew Community Day",
+                name=("Sandshrew Community Day"),
                 event_type="community-day",
-                start="2026-10-10T14:00:00",
-                end="2026-10-10T17:00:00",
+                start=("2026-10-10T14:00:00"),
+                end=("2026-10-10T17:00:00"),
                 extra_data={
                     "communityday": {
                         "spawns": [
                             {
-                                "name": "Sandshrew",
+                                "name": ("Sandshrew"),
                             },
                             {
-                                "name": "Sandshrew (Alolan)",
+                                "name": ("Sandshrew (Alolan)"),
                             },
                         ]
                     }
@@ -209,7 +210,7 @@ def test_fetch_event_schedule_preserves_multiple_community_day_pokemon(
 
     assert schedule.community_day is not None
 
-    assert [pokemon.name for pokemon in (schedule.community_day.featured_pokemon)] == [
+    assert [pokemon.name for pokemon in schedule.community_day.featured_pokemon] == [
         "Sandshrew",
         "Sandshrew (Alolan)",
     ]
@@ -222,22 +223,22 @@ def test_fetch_event_schedule_merges_same_max_monday_occurrence(
     mocked_urlopen.return_value = _create_response(
         [
             _create_event(
-                name="Dynamax Articuno during Max Monday",
+                name=("Dynamax Articuno during Max Monday"),
                 event_type="max-mondays",
-                start="2026-10-05T06:00:00",
-                end="2026-10-05T21:00:00",
+                start=("2026-10-05T06:00:00"),
+                end=("2026-10-05T21:00:00"),
             ),
             _create_event(
-                name="Dynamax Zapdos during Max Monday",
+                name=("Dynamax Zapdos during Max Monday"),
                 event_type="max-mondays",
-                start="2026-10-05T06:00:00",
-                end="2026-10-05T21:00:00",
+                start=("2026-10-05T06:00:00"),
+                end=("2026-10-05T21:00:00"),
             ),
             _create_event(
-                name="Dynamax Moltres during Max Monday",
+                name=("Dynamax Moltres during Max Monday"),
                 event_type="max-mondays",
-                start="2026-10-05T06:00:00",
-                end="2026-10-05T21:00:00",
+                start=("2026-10-05T06:00:00"),
+                end=("2026-10-05T21:00:00"),
             ),
         ]
     )
@@ -254,7 +255,7 @@ def test_fetch_event_schedule_merges_same_max_monday_occurrence(
 
     assert schedule.max_monday is not None
 
-    assert [pokemon.name for pokemon in (schedule.max_monday.featured_pokemon)] == [
+    assert [pokemon.name for pokemon in schedule.max_monday.featured_pokemon] == [
         "Articuno",
         "Zapdos",
         "Moltres",
@@ -270,8 +271,8 @@ def test_fetch_event_schedule_parses_combined_max_monday_names(
             _create_event(
                 name=("Dynamax Articuno, Dynamax Zapdos, and Dynamax Moltres during Max Monday"),
                 event_type="max-mondays",
-                start="2026-10-05T06:00:00",
-                end="2026-10-05T21:00:00",
+                start=("2026-10-05T06:00:00"),
+                end=("2026-10-05T21:00:00"),
             )
         ]
     )
@@ -288,7 +289,7 @@ def test_fetch_event_schedule_parses_combined_max_monday_names(
 
     assert schedule.max_monday is not None
 
-    assert [pokemon.name for pokemon in (schedule.max_monday.featured_pokemon)] == [
+    assert [pokemon.name for pokemon in schedule.max_monday.featured_pokemon] == [
         "Articuno",
         "Zapdos",
         "Moltres",
@@ -302,16 +303,16 @@ def test_fetch_event_schedule_prefers_active_event(
     mocked_urlopen.return_value = _create_response(
         [
             _create_event(
-                name="Active Spotlight Hour",
-                event_type="pokemon-spotlight-hour",
-                start="2026-10-01T18:00:00",
-                end="2026-10-01T19:00:00",
+                name=("Active Spotlight Hour"),
+                event_type=("pokemon-spotlight-hour"),
+                start=("2026-10-01T18:00:00"),
+                end=("2026-10-01T19:00:00"),
             ),
             _create_event(
-                name="Future Spotlight Hour",
-                event_type="pokemon-spotlight-hour",
-                start="2026-10-08T18:00:00",
-                end="2026-10-08T19:00:00",
+                name=("Future Spotlight Hour"),
+                event_type=("pokemon-spotlight-hour"),
+                start=("2026-10-08T18:00:00"),
+                end=("2026-10-08T19:00:00"),
             ),
         ]
     )
@@ -339,16 +340,16 @@ def test_fetch_event_schedule_ignores_finished_events(
     mocked_urlopen.return_value = _create_response(
         [
             _create_event(
-                name="Old Spotlight Hour",
-                event_type="pokemon-spotlight-hour",
-                start="2026-09-24T18:00:00",
-                end="2026-09-24T19:00:00",
+                name=("Old Spotlight Hour"),
+                event_type=("pokemon-spotlight-hour"),
+                start=("2026-09-24T18:00:00"),
+                end=("2026-09-24T19:00:00"),
             ),
             _create_event(
-                name="Next Spotlight Hour",
-                event_type="pokemon-spotlight-hour",
-                start="2026-10-08T18:00:00",
-                end="2026-10-08T19:00:00",
+                name=("Next Spotlight Hour"),
+                event_type=("pokemon-spotlight-hour"),
+                start=("2026-10-08T18:00:00"),
+                end=("2026-10-08T19:00:00"),
             ),
         ]
     )
@@ -375,10 +376,10 @@ def test_fetch_event_schedule_converts_utc_time(
     mocked_urlopen.return_value = _create_response(
         [
             _create_event(
-                name="Test Spotlight Hour",
-                event_type="pokemon-spotlight-hour",
-                start="2026-10-01T16:00:00Z",
-                end="2026-10-01T17:00:00Z",
+                name=("Test Spotlight Hour"),
+                event_type=("pokemon-spotlight-hour"),
+                start=("2026-10-01T16:00:00Z"),
+                end=("2026-10-01T17:00:00Z"),
             )
         ]
     )
@@ -409,8 +410,8 @@ def test_fetch_event_schedule_ignores_unsupported_events(
             _create_event(
                 name="Some Other Event",
                 event_type="other-event",
-                start="2026-10-10T10:00:00",
-                end="2026-10-10T12:00:00",
+                start="not-a-date",
+                end="also-not-a-date",
             )
         ]
     )
@@ -426,9 +427,47 @@ def test_fetch_event_schedule_ignores_unsupported_events(
     )
 
     assert schedule.community_day is None
+
     assert schedule.community_day_classic is None
+
     assert schedule.spotlight_hour is None
     assert schedule.max_monday is None
+
+
+@patch("novachrono.sources.scraped_duck._common.urlopen")
+def test_fetch_event_schedule_ignores_supported_event_with_invalid_datetime(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response(
+        [
+            _create_event(
+                name=("Unknown Community Day"),
+                event_type="community-day",
+                start="TBD",
+                end="TBD",
+            ),
+            _create_event(
+                name=("Bulbasaur Community Day"),
+                event_type="community-day",
+                start=("2026-10-17T14:00:00"),
+                end=("2026-10-17T17:00:00"),
+            ),
+        ]
+    )
+
+    schedule = fetch_event_schedule(
+        now=datetime(
+            2026,
+            10,
+            1,
+            12,
+            tzinfo=BERLIN,
+        )
+    )
+
+    assert schedule.community_day is not None
+
+    assert schedule.community_day.name == "Bulbasaur Community Day"
 
 
 def test_fetch_event_schedule_requires_timezone_aware_now() -> None:
@@ -449,7 +488,7 @@ def test_fetch_event_schedule_requires_timezone_aware_now() -> None:
 def test_fetch_event_schedule_rejects_invalid_timeout() -> None:
     with pytest.raises(
         ValueError,
-        match="timeout must be greater than zero",
+        match=("timeout must be greater than zero"),
     ):
         fetch_event_schedule(
             now=datetime(
@@ -472,8 +511,8 @@ def test_fetch_event_schedule_rejects_invalid_time_range(
             _create_event(
                 name="Invalid Event",
                 event_type="community-day",
-                start="2026-10-10T17:00:00",
-                end="2026-10-10T14:00:00",
+                start=("2026-10-10T17:00:00"),
+                end=("2026-10-10T14:00:00"),
             )
         ]
     )
