@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Henning Steinberg", email = "139321709+drachenpapa@users.noreply.github.com" }
 ]
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.15,<3.16"
 license = "MIT"
 keywords = [
     "dashboard",
