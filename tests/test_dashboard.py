@@ -7,6 +7,7 @@ from PIL import Image
 from novachrono.dashboard import (
     CLOCK_PANEL_INDEX,
     EVENT_PANEL_INDEX,
+    MATRIX_PANEL_INDEX,
     RAID_PANEL_INDEX,
     WEATHER_PANEL_INDEX,
     render_dashboard,
@@ -15,6 +16,7 @@ from novachrono.design import PANEL_COUNT, PANEL_SIZE
 from novachrono.models.pokemon_go import EventSchedule, RaidRoster
 from novachrono.models.weather import CurrentWeather
 from novachrono.units import TemperatureUnit
+from novachrono.widgets.matrix import render_matrix_panel
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -29,6 +31,7 @@ FIXED_TIME = datetime(
 
 
 def test_current_widgets_have_expected_positions() -> None:
+    assert MATRIX_PANEL_INDEX == 0
     assert WEATHER_PANEL_INDEX == 1
     assert CLOCK_PANEL_INDEX == 2
     assert RAID_PANEL_INDEX == 3
@@ -76,7 +79,9 @@ def test_dashboard_renders_widgets_on_configured_panels(
         raid_roster=raid_roster,
     )
 
-    placeholder = panels[0].tobytes()
+    matrix_panel = render_matrix_panel()
+
+    assert panels[MATRIX_PANEL_INDEX].tobytes() == matrix_panel.tobytes()
 
     for panel_index in (
         WEATHER_PANEL_INDEX,
@@ -84,7 +89,7 @@ def test_dashboard_renders_widgets_on_configured_panels(
         RAID_PANEL_INDEX,
         EVENT_PANEL_INDEX,
     ):
-        assert panels[panel_index].tobytes() != placeholder
+        assert panels[panel_index].tobytes() != matrix_panel.tobytes()
 
 
 def test_dashboard_passes_artwork_to_raid_renderer(
@@ -206,6 +211,7 @@ def test_temperature_unit_changes_only_weather_panel(
     )
 
     for panel_index in (
+        MATRIX_PANEL_INDEX,
         CLOCK_PANEL_INDEX,
         RAID_PANEL_INDEX,
         EVENT_PANEL_INDEX,
@@ -254,4 +260,9 @@ def test_locale_changes_localized_panels(
     assert (
         german_dashboard[RAID_PANEL_INDEX].tobytes()
         == english_dashboard[RAID_PANEL_INDEX].tobytes()
+    )
+
+    assert (
+        german_dashboard[MATRIX_PANEL_INDEX].tobytes()
+        == english_dashboard[MATRIX_PANEL_INDEX].tobytes()
     )

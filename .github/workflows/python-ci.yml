@@ -31,18 +31,6 @@ jobs:
       - name: Run security linting
         run: uv run bandit -r src
 
-  dependency-audit:
-    name: Dependency audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup Python project
-        uses: ./.github/actions/setup-python
-      - name: Audit Python dependencies
-        run: uv run pip-audit
-
   tests:
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

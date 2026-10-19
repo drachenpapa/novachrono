@@ -16,11 +16,9 @@ runs:
         version: ${{ inputs.uv-version }}
         enable-cache: true
         cache-dependency-glob: uv.lock
-
     - name: Install Python
       shell: bash
       run: uv python install
-
     - name: Install project
       shell: bash
       run: uv sync --locked --all-groups
