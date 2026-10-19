@@ -33,7 +33,7 @@ from novachrono.sources.pokemon_artwork import (
 
 app = typer.Typer(
     name="novachrono",
-    help="Render and send dashboards to a Divoom Times Gate.",
+    help="Render, preview, and send a dashboard for a Divoom Times Gate.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -51,7 +51,7 @@ def preview(
         ),
     ] = Path("output/dashboard-preview.png"),
 ) -> None:
-    """Render the complete dashboard preview."""
+    """Render a local preview of the complete dashboard."""
 
     config = _load_app_config()
     weather = _load_current_weather(config)
@@ -83,7 +83,7 @@ def check_device(
     host: HostOption = None,
     token: TokenOption = None,
 ) -> None:
-    """Check the configured Times Gate connection."""
+    """Check the connection to the configured Times Gate."""
 
     app_config = _load_app_config()
 
@@ -104,10 +104,10 @@ def check_device(
     typer.echo(json.dumps(response, indent=2, ensure_ascii=False))
 
 
-app.command(name="send-events")(send_events)
-app.command(name="send-weather")(send_weather)
-app.command(name="send-clock")(send_clock)
-app.command(name="send-raids")(send_raids)
 app.command(name="send-dashboard")(send_dashboard)
+app.command(name="send-clock")(send_clock)
+app.command(name="send-pokemon-events")(send_events)
+app.command(name="send-pokemon-raids")(send_raids)
+app.command(name="send-weather")(send_weather)
 
 __all__ = ["app"]

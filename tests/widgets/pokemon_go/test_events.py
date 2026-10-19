@@ -160,7 +160,6 @@ def test_render_event_animation_uses_fixed_category_order() -> None:
     )
 
     assert len(frames) == 4
-
     assert (255, 0, 0) in set(frames[0].get_flattened_data())
     assert (0, 255, 0) in set(frames[1].get_flattened_data())
     assert (0, 0, 255) in set(frames[2].get_flattened_data())
@@ -355,12 +354,12 @@ def test_max_monday_changes_with_date() -> None:
     assert first_panel.tobytes() != second_panel.tobytes()
 
 
-def test_render_event_panel_handles_event_without_featured_pokemon() -> None:
+def test_render_event_panel_handles_unannounced_featured_pokemon() -> None:
     panel = render_event_panel(
         EventSchedule(
             community_day=_create_event(
                 event_type=PokemonGoEventType.COMMUNITY_DAY,
-                name="Community Day",
+                name="November Community Day",
                 bonus="3\u00d7 Catch XP",
             )
         ),
@@ -372,3 +371,36 @@ def test_render_event_panel_handles_event_without_featured_pokemon() -> None:
         PANEL_SIZE,
     )
     assert panel.mode == "RGB"
+
+
+def test_unannounced_pokemon_uses_different_placeholder_from_missing_artwork() -> None:
+    unannounced_event = _create_event(
+        event_type=PokemonGoEventType.COMMUNITY_DAY,
+        name="November Community Day",
+    )
+
+    known_event_without_artwork = _create_event(
+        event_type=PokemonGoEventType.COMMUNITY_DAY,
+        name="Community Day",
+        pokemon=(
+            PokemonGoFeaturedPokemon(
+                name="TBA",
+            ),
+        ),
+    )
+
+    unannounced_panel = render_event_panel(
+        EventSchedule(
+            community_day=unannounced_event,
+        ),
+        locale="de_DE",
+    )
+
+    missing_artwork_panel = render_event_panel(
+        EventSchedule(
+            community_day=known_event_without_artwork,
+        ),
+        locale="de_DE",
+    )
+
+    assert unannounced_panel.tobytes() != missing_artwork_panel.tobytes()

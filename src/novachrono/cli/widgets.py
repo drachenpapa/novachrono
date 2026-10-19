@@ -49,12 +49,32 @@ from novachrono.widgets.weather import (
 )
 
 
+def send_clock(
+    host: HostOption = None,
+    token: TokenOption = None,
+) -> None:
+    """Render and send the current clock panel."""
+
+    app_config = _load_app_config()
+    client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
+
+    panel = render_clock_panel(datetime.now(app_config.timezone), locale=app_config.locale)
+
+    _send_widget_frames(
+        client=client,
+        panel_index=CLOCK_PANEL_INDEX,
+        frames=(panel,),
+        frame_duration_ms=None,
+        name="Clock",
+    )
+
+
 def send_events(
     host: HostOption = None,
     token: TokenOption = None,
     force: ForceOption = False,
 ) -> None:
-    """Retrieve and send Pokémon GO events when the schedule has changed."""
+    """Retrieve and send Pokémon GO events when their display state has changed."""
 
     app_config = _load_app_config()
     client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
@@ -84,12 +104,45 @@ def send_events(
     _write_fingerprint_or_warn(EVENT_STATE_PATH, fingerprint)
 
 
+def send_raids(
+    host: HostOption = None,
+    token: TokenOption = None,
+    force: ForceOption = False,
+) -> None:
+    """Retrieve and send Pokémon GO raids when their display state has changed."""
+
+    app_config = _load_app_config()
+    client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
+
+    raw_raid_roster = _load_raw_raid_roster()
+    raid_roster = localize_raid_roster(raw_raid_roster, locale=app_config.locale)
+    fingerprint = raid_roster_fingerprint(raid_roster, locale=app_config.locale)
+
+    if not force and _cached_fingerprint_matches(RAID_STATE_PATH, fingerprint):
+        typer.echo("Pokémon GO raids unchanged; display update skipped.")
+        return
+
+    raid_artwork = fetch_raid_artwork(raid_roster)
+
+    frames = render_raid_animation(raid_roster, artwork_by_url=raid_artwork)
+
+    _send_widget_frames(
+        client=client,
+        panel_index=RAID_PANEL_INDEX,
+        frames=frames,
+        frame_duration_ms=RAID_FRAME_DURATION_MS if len(frames) > 1 else None,
+        name="Pokémon GO raids",
+    )
+
+    _write_fingerprint_or_warn(RAID_STATE_PATH, fingerprint)
+
+
 def send_weather(
     host: HostOption = None,
     token: TokenOption = None,
     force: ForceOption = False,
 ) -> None:
-    """Retrieve and send weather when the displayed state has changed."""
+    """Retrieve and send weather when its display state has changed."""
 
     app_config = _load_app_config()
     client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
@@ -121,56 +174,3 @@ def send_weather(
     )
 
     _write_fingerprint_or_warn(WEATHER_STATE_PATH, fingerprint)
-
-
-def send_clock(
-    host: HostOption = None,
-    token: TokenOption = None,
-) -> None:
-    """Render and send the clock panel."""
-
-    app_config = _load_app_config()
-    client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
-
-    panel = render_clock_panel(datetime.now(app_config.timezone), locale=app_config.locale)
-
-    _send_widget_frames(
-        client=client,
-        panel_index=CLOCK_PANEL_INDEX,
-        frames=(panel,),
-        frame_duration_ms=None,
-        name="Clock",
-    )
-
-
-def send_raids(
-    host: HostOption = None,
-    token: TokenOption = None,
-    force: ForceOption = False,
-) -> None:
-    """Retrieve and send Pokémon GO raids when the roster has changed."""
-
-    app_config = _load_app_config()
-    client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
-
-    raw_raid_roster = _load_raw_raid_roster()
-    raid_roster = localize_raid_roster(raw_raid_roster, locale=app_config.locale)
-    fingerprint = raid_roster_fingerprint(raid_roster, locale=app_config.locale)
-
-    if not force and _cached_fingerprint_matches(RAID_STATE_PATH, fingerprint):
-        typer.echo("Pokémon GO raids unchanged; display update skipped.")
-        return
-
-    raid_artwork = fetch_raid_artwork(raid_roster)
-
-    frames = render_raid_animation(raid_roster, artwork_by_url=raid_artwork)
-
-    _send_widget_frames(
-        client=client,
-        panel_index=RAID_PANEL_INDEX,
-        frames=frames,
-        frame_duration_ms=RAID_FRAME_DURATION_MS if len(frames) > 1 else None,
-        name="Pokémon GO raids",
-    )
-
-    _write_fingerprint_or_warn(RAID_STATE_PATH, fingerprint)

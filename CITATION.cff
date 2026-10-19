@@ -17,8 +17,10 @@ license: MIT
 
 abstract: >-
   Novachrono is a self-hosted dashboard renderer for the Divoom Times Gate.
-  It generates a consistent five-screen interface for information such as
-  current weather, time and date, and Pokémon GO raid bosses.
+  It generates a consistent five-screen interface for current weather, local
+  time and date, Pokémon GO raid bosses, and selected Pokémon GO events.
+  It supports local previews as well as static and animated delivery through
+  the Times Gate local network API.
 
 keywords:
   - Divoom
@@ -27,3 +29,4 @@ keywords:
   - Python
   - Raspberry Pi
   - pixel display
+  - Pokémon GO

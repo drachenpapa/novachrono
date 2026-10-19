@@ -1,5 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Renovate configuration for Novachrono",
-  "extends": ["github>drachenpapa/skeletor"]
+  "extends": ["github>drachenpapa/skeletor"],
+  "packageRules": [
+    {
+      "description": "Update the Python requirement and interpreter pin together",
+      "matchManagers": ["pep621", "pyenv"],
+      "matchPackageNames": ["python"],
+      "groupName": "Python runtime",
+      "groupSlug": "python-runtime"
+    }
+  ]
 }

@@ -294,7 +294,7 @@ def test_send_events_uses_static_image_for_single_frame(
 
     result = runner.invoke(
         app,
-        ["send-events"],
+        ["send-pokemon-events"],
     )
 
     assert result.exit_code == 0
@@ -330,7 +330,7 @@ def test_send_events_skips_artwork_when_unchanged(
 
     first_result = runner.invoke(
         app,
-        ["send-events"],
+        ["send-pokemon-events"],
     )
 
     assert first_result.exit_code == 0
@@ -341,7 +341,7 @@ def test_send_events_skips_artwork_when_unchanged(
 
     second_result = runner.invoke(
         app,
-        ["send-events"],
+        ["send-pokemon-events"],
     )
 
     assert second_result.exit_code == 0
@@ -376,13 +376,13 @@ def test_send_events_force_sends_unchanged_schedule(
 
     first_result = runner.invoke(
         app,
-        ["send-events"],
+        ["send-pokemon-events"],
     )
 
     forced_result = runner.invoke(
         app,
         [
-            "send-events",
+            "send-pokemon-events",
             "--force",
         ],
     )
@@ -418,7 +418,7 @@ def test_send_events_uses_animation_for_multiple_frames(
 
     result = runner.invoke(
         app,
-        ["send-events"],
+        ["send-pokemon-events"],
     )
 
     assert result.exit_code == 0
@@ -471,7 +471,7 @@ def test_send_raids_uses_static_image_for_single_frame(
 
     result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     assert result.exit_code == 0
@@ -513,7 +513,7 @@ def test_send_raids_skips_artwork_when_localized_roster_is_unchanged(
 
     first_result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     assert first_result.exit_code == 0
@@ -525,7 +525,7 @@ def test_send_raids_skips_artwork_when_localized_roster_is_unchanged(
 
     second_result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     assert second_result.exit_code == 0
@@ -585,12 +585,12 @@ def test_send_raids_sends_when_localized_roster_changes(
 
     first_result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     second_result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     assert first_result.exit_code == 0
@@ -627,13 +627,13 @@ def test_send_raids_force_sends_unchanged_roster(
 
     first_result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     forced_result = runner.invoke(
         app,
         [
-            "send-raids",
+            "send-pokemon-raids",
             "--force",
         ],
     )
@@ -673,7 +673,7 @@ def test_send_raids_uses_animation_for_multiple_bosses(
 
     result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     assert result.exit_code == 0
@@ -728,7 +728,7 @@ def test_send_raids_reports_scraped_duck_error(
 
     result = runner.invoke(
         app,
-        ["send-raids"],
+        ["send-pokemon-raids"],
     )
 
     assert result.exit_code == 1
@@ -753,7 +753,7 @@ def test_send_events_reports_scraped_duck_error(
 
     result = runner.invoke(
         app,
-        ["send-events"],
+        ["send-pokemon-events"],
     )
 
     assert result.exit_code == 1

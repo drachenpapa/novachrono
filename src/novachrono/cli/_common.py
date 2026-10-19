@@ -70,7 +70,7 @@ ForceOption = Annotated[
     bool,
     typer.Option(
         "--force",
-        help="Send even if the cached source state is unchanged.",
+        help="Send even if the cached display state is unchanged.",
     ),
 ]
 

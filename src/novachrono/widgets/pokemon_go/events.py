@@ -43,6 +43,8 @@ BONUS_BOTTOM: Final = 109
 CONTENT_LEFT: Final = 17
 CONTENT_RIGHT: Final = PANEL_SIZE - 17
 
+_UNKNOWN_POKEMON_NAME: Final = "TBA"
+
 _EVENT_TITLES: Final = {
     PokemonGoEventType.COMMUNITY_DAY: "COMMUNITY DAY",
     PokemonGoEventType.COMMUNITY_DAY_CLASSIC: "CD CLASSIC",
@@ -135,15 +137,16 @@ def _render_event(
 
     _draw_event_artwork(image, draw, pokemon=pokemon, artwork_by_url=artwork_by_url)
 
-    if pokemon is not None:
-        _draw_centered_fitted_text(
-            draw,
-            text=pokemon.name.upper(),
-            top=NAME_TOP,
-            bottom=NAME_BOTTOM,
-            font_sizes=(14, 13, 12, 11, 10, 9),
-            fill=TEXT_COLOR,
-        )
+    pokemon_name = pokemon.name.upper() if pokemon is not None else _UNKNOWN_POKEMON_NAME
+
+    _draw_centered_fitted_text(
+        draw,
+        text=pokemon_name,
+        top=NAME_TOP,
+        bottom=NAME_BOTTOM,
+        font_sizes=(14, 13, 12, 11, 10, 9),
+        fill=TEXT_COLOR,
+    )
 
     _draw_centered_fitted_text(
         draw,
@@ -191,6 +194,10 @@ def _draw_event_artwork(
     pokemon: PokemonGoFeaturedPokemon | None,
     artwork_by_url: Mapping[str, Image.Image] | None,
 ) -> None:
+    if pokemon is None:
+        _draw_unknown_pokemon(draw)
+        return
+
     artwork = _find_artwork(pokemon, artwork_by_url=artwork_by_url)
 
     if artwork is None:
@@ -205,7 +212,7 @@ def _draw_event_artwork(
 
         image.paste(fitted_artwork, (x, y), fitted_artwork)
 
-    if pokemon is not None and pokemon.can_be_shiny is True:
+    if pokemon.can_be_shiny is True:
         draw_sparkle(
             draw,
             origin=(ARTWORK_LEFT + ARTWORK_SIZE - 3, ARTWORK_TOP + ARTWORK_SIZE - 3),
@@ -215,19 +222,42 @@ def _draw_event_artwork(
 
 
 def _find_artwork(
-    pokemon: PokemonGoFeaturedPokemon | None,
+    pokemon: PokemonGoFeaturedPokemon,
     *,
     artwork_by_url: Mapping[str, Image.Image] | None,
 ) -> Image.Image | None:
-    if pokemon is None or pokemon.artwork_url is None or artwork_by_url is None:
+    if pokemon.artwork_url is None or artwork_by_url is None:
         return None
 
     return artwork_by_url.get(pokemon.artwork_url)
 
 
+def _draw_unknown_pokemon(draw: ImageDraw.ImageDraw) -> None:
+    center_x = PANEL_SIZE // 2
+    center_y = ARTWORK_TOP + ARTWORK_SIZE // 2
+
+    for radius in (16, 14):
+        draw.ellipse(
+            (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
+            outline=FRAME_DIM_COLOR,
+            width=1,
+        )
+
+    font = find_font_that_fits(draw, text="?", maximum_width=18, font_sizes=(26, 24, 22, 20, 18))
+
+    bounding_box = draw.textbbox((0, 0), "?", font=font)
+
+    text_width = bounding_box[2] - bounding_box[0]
+    text_height = bounding_box[3] - bounding_box[1]
+
+    x = center_x - text_width // 2 - bounding_box[0]
+    y = center_y - text_height // 2 - bounding_box[1]
+
+    draw.text((x, y), "?", font=font, fill=TEXT_COLOR)
+
+
 def _draw_artwork_placeholder(draw: ImageDraw.ImageDraw) -> None:
     inset = 10
-
     center_x = PANEL_SIZE // 2
     center_y = ARTWORK_TOP + ARTWORK_SIZE // 2
 
@@ -236,6 +266,7 @@ def _draw_artwork_placeholder(draw: ImageDraw.ImageDraw) -> None:
         fill=FRAME_DIM_COLOR,
         width=1,
     )
+
     draw.line(
         (center_x, ARTWORK_TOP + inset, center_x, ARTWORK_TOP + ARTWORK_SIZE - inset),
         fill=FRAME_DIM_COLOR,
@@ -253,6 +284,7 @@ def _draw_centered_fitted_text(
     fill: str,
 ) -> None:
     available_width = CONTENT_RIGHT - CONTENT_LEFT + 1
+
     font = find_font_that_fits(
         draw, text=text, maximum_width=available_width, font_sizes=font_sizes
     )

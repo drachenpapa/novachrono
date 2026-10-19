@@ -14,6 +14,7 @@ from novachrono.cli._common import (
 )
 from novachrono.dashboard import (
     EVENT_PANEL_INDEX,
+    MATRIX_PANEL_INDEX,
     RAID_PANEL_INDEX,
     WEATHER_PANEL_INDEX,
     render_dashboard,
@@ -26,18 +27,16 @@ from novachrono.display_state import (
     raid_roster_fingerprint,
     weather_fingerprint,
 )
-from novachrono.outputs.delivery import (
-    deliver_frames_with_retry,
-)
-from novachrono.outputs.times_gate import (
-    TimesGateError,
-)
-from novachrono.sources.pokeapi import (
-    localize_raid_roster,
-)
+from novachrono.outputs.delivery import deliver_frames_with_retry
+from novachrono.outputs.times_gate import TimesGateError
+from novachrono.sources.pokeapi import localize_raid_roster
 from novachrono.sources.pokemon_artwork import (
     fetch_event_artwork,
     fetch_raid_artwork,
+)
+from novachrono.widgets.matrix import (
+    MATRIX_FRAME_DURATION_MS,
+    render_matrix_animation,
 )
 from novachrono.widgets.pokemon_go import (
     EVENT_FRAME_DURATION_MS,
@@ -61,23 +60,15 @@ def send_dashboard(
     client = _create_times_gate_client(app_config=app_config, host=host, local_token=token)
 
     weather = _load_current_weather(app_config)
-
     event_schedule = _load_event_schedule(app_config)
-
     event_artwork = fetch_event_artwork(event_schedule)
-
     raw_raid_roster = _load_raw_raid_roster()
-
     raid_roster = localize_raid_roster(raw_raid_roster, locale=app_config.locale)
-
     raid_artwork = fetch_raid_artwork(raid_roster)
-
     event_state = event_schedule_fingerprint(event_schedule, locale=app_config.locale)
-
     weather_state = weather_fingerprint(
         weather, locale=app_config.locale, temperature_unit=app_config.temperature_unit
     )
-
     raid_state = raid_roster_fingerprint(raid_roster, locale=app_config.locale)
 
     panels = render_dashboard(
@@ -91,34 +82,31 @@ def send_dashboard(
         temperature_unit=app_config.temperature_unit,
     )
 
+    matrix_frames = render_matrix_animation()
     event_frames = render_event_animation(
         event_schedule, locale=app_config.locale, artwork_by_url=event_artwork
     )
-
     weather_frames = render_weather_animation(
         weather, locale=app_config.locale, temperature_unit=app_config.temperature_unit
     )
-
     raid_frames = render_raid_animation(raid_roster, artwork_by_url=raid_artwork)
 
     panel_frames: dict[int, tuple[tuple[Image.Image, ...], int | None]] = {
+        MATRIX_PANEL_INDEX: (matrix_frames, MATRIX_FRAME_DURATION_MS),
         EVENT_PANEL_INDEX: (
             event_frames,
-            (EVENT_FRAME_DURATION_MS if len(event_frames) > 1 else None),
+            EVENT_FRAME_DURATION_MS if len(event_frames) > 1 else None,
         ),
         WEATHER_PANEL_INDEX: (weather_frames, weather_frame_duration_ms(weather.condition)),
-        RAID_PANEL_INDEX: (raid_frames, (RAID_FRAME_DURATION_MS if len(raid_frames) > 1 else None)),
+        RAID_PANEL_INDEX: (raid_frames, RAID_FRAME_DURATION_MS if len(raid_frames) > 1 else None),
     }
 
     failed_displays: list[int] = []
-
     typer.echo(f"Sending dashboard to {len(panels)} displays at {client.config.api_url} ...")
 
     for panel_index, panel in enumerate(panels):
         display_number = panel_index + 1
-
         typer.echo(f"Sending display {display_number}/{len(panels)} ...")
-
         frames, frame_duration_ms = panel_frames.get(panel_index, ((panel,), None))
 
         try:

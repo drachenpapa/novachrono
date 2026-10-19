@@ -17,6 +17,23 @@ COMMUNITY_DAY_EVENT_TYPE: Final = "community-day"
 SPOTLIGHT_HOUR_EVENT_TYPE: Final = "pokemon-spotlight-hour"
 MAX_MONDAY_EVENT_TYPE: Final = "max-mondays"
 
+_COMMUNITY_DAY_PLACEHOLDER_NAMES: Final = frozenset(
+    {
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    }
+)
+
 
 def _parse_event_type(data: dict[str, Any]) -> PokemonGoEventType | None:
     value = data.get("eventType")
@@ -109,8 +126,8 @@ def _parse_community_day_details(
             featured_pokemon.append(
                 PokemonGoFeaturedPokemon(
                     name=name,
-                    can_be_shiny=(_read_shiny_availability(shinies, pokemon_name=name)),
-                    artwork_url=(_read_optional_image_url(spawn, "image")),
+                    can_be_shiny=_read_shiny_availability(shinies, pokemon_name=name),
+                    artwork_url=_read_optional_image_url(spawn, "image"),
                 )
             )
 
@@ -173,8 +190,8 @@ def _parse_spotlight_featured_pokemon(data: dict[str, Any]) -> PokemonGoFeatured
 
     return PokemonGoFeaturedPokemon(
         name=name,
-        can_be_shiny=(_read_optional_boolean(data, "canBeShiny")),
-        artwork_url=(_read_optional_image_url(data, "image")),
+        can_be_shiny=_read_optional_boolean(data, "canBeShiny"),
+        artwork_url=_read_optional_image_url(data, "image"),
     )
 
 
@@ -198,8 +215,13 @@ def _parse_community_day_pokemon_names(event_name: str) -> tuple[str, ...]:
     for suffix in (" Community Day Classic", " Community Day"):
         without_suffix = _strip_suffix(normalized_name, suffix)
 
-        if without_suffix != normalized_name:
-            return _split_featured_names(without_suffix)
+        if without_suffix == normalized_name:
+            continue
+
+        if without_suffix.casefold() in _COMMUNITY_DAY_PLACEHOLDER_NAMES:
+            return ()
+
+        return _split_featured_names(without_suffix)
 
     return ()
 
@@ -257,7 +279,7 @@ def _strip_suffix(
 ) -> str:
     normalized_value = value.strip()
 
-    if not (normalized_value.casefold().endswith(suffix.casefold())):
+    if not normalized_value.casefold().endswith(suffix.casefold()):
         return normalized_value
 
     return normalized_value[: -len(suffix)].strip()

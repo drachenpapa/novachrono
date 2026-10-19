@@ -53,7 +53,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      placeholder: "e.g. Windows 11 with Python 3.14 or Raspberry Pi OS"
+      placeholder: "e.g. Windows 11 with Python 3.15 or Raspberry Pi OS"
 
   - type: textarea
     id: additional

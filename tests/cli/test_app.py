@@ -26,13 +26,9 @@ def test_help_lists_available_commands() -> None:
     assert "check-device" in result.stdout
     assert "send-clock" in result.stdout
     assert "send-weather" in result.stdout
-    assert "send-raids" in result.stdout
-    assert "send-events" in result.stdout
+    assert "send-pokemon-raids" in result.stdout
+    assert "send-pokemon-events" in result.stdout
     assert "send-dashboard" in result.stdout
-
-    assert "send-pokemon" not in result.stdout
-    assert "update-weather" not in result.stdout
-    assert "update-pokemon" not in result.stdout
     assert "run" not in result.stdout
 
 

@@ -93,7 +93,7 @@ body:
     id: python-version
     attributes:
       label: Python version
-      placeholder: "e.g. Python 3.14.7"
+      placeholder: "e.g. Python 3.15.0"
 
   - type: input
     id: firmware

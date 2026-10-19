@@ -89,9 +89,12 @@ Pillow images / animation frames
      |
      +--> Local preview
      |
-     +--> Output delivery
-              |
-              v
+     +--> CLI orchestration
+             |
+             v
+        Output delivery
+             |
+             v
         Times Gate adapter
 ```
 
@@ -168,11 +171,24 @@ This is a conceptual structure, not a requirement to create an interface or clas
 
 - contains the project's small UI translation table
 
-`cli.py`
+`cli/`
 
-- orchestrates one-shot application commands
-- connects configuration, sources, models, widgets, state, and outputs
+- exposes the Typer application and one-shot commands
+- orchestrates configuration, sources, models, widgets, state, and outputs
+- keeps shared CLI helpers separate from widget-specific and full-dashboard commands
 - must not become a permanently running scheduler
+
+The CLI package currently contains:
+
+```text
+cli/
+├── __init__.py
+├── _common.py
+├── dashboard.py
+└── widgets.py
+```
+
+Do not collapse these responsibilities back into a single large CLI module without a concrete reason.
 
 ## Current Dashboard
 
@@ -184,21 +200,24 @@ Current assignment:
 0 -> placeholder
 1 -> current weather
 2 -> clock and date
-3 -> pokemon go
-4 -> placeholder
+3 -> Pokémon GO raids
+4 -> Pokémon GO events
 ```
 
 The physical displays are numbered 1 through 5.
 
 The weather widget uses live data from Open-Meteo.
 
-The Pokémon GO widget uses:
+The Pokémon GO widgets use:
 
-- ScrapedDuck for current raid data
-- ScrapedDuck artwork URLs
+- ScrapedDuck for raid data
+- ScrapedDuck for supported event data
+- ScrapedDuck artwork URLs when available
 - PokeAPI for best-effort Pokémon name localization
+- PokeAPI for missing event artwork URLs
+- the Pokémon artwork source adapter for downloading and normalizing artwork
 
-Some weather conditions and multi-boss Pokémon GO states use native Times Gate animations.
+Some weather conditions and multi-frame Pokémon GO states use native Times Gate animations.
 
 ## Rendering
 
@@ -248,6 +267,10 @@ shared visual primitive -> design/
 widget-specific geometry -> widget module
 ```
 
+Domain-specific shared drawing behavior may remain in a private domain helper when it is only reused inside that domain.
+
+For example, Pokémon GO-specific shared drawing helpers do not automatically belong in global `design/`.
+
 Avoid creating generic layout systems unless multiple widgets clearly need the same behavior.
 
 ## Clock
@@ -257,8 +280,16 @@ The clock:
 - displays current local time
 - displays the numeric date
 - requires a timezone-aware `datetime`
+- uses locale-aware date formatting
 - uses the shared HUD frame
 - renders a single static panel
+
+Current date formats are:
+
+```text
+de_DE -> DD.MM.YYYY
+en_US -> MM/DD/YYYY
+```
 
 Clock rendering must remain independent of scheduling and device communication.
 
@@ -316,9 +347,9 @@ Weather change detection is based on rendering-relevant normalized state.
 
 Do not reintroduce forecast fields unless an implemented feature actually needs them.
 
-## Pokémon GO
+## Pokémon GO Raids
 
-The Pokémon GO widget currently displays:
+The raid widget currently displays:
 
 - regular five-star raid bosses
 - Shadow five-star raid bosses
@@ -343,13 +374,15 @@ The upper slot uses:
 
 Mega raids use the lower slot.
 
+Artwork is free-floating inside its layout region rather than surrounded by a decorative mini-frame.
+
 When multiple bosses are active, the renderer produces multiple frames.
 
 The animation length is determined by the longest non-empty category.
 
 Shorter non-empty categories wrap while the longer category continues.
 
-Pokémon GO raid frames currently use a duration of:
+Raid frames currently use a duration of:
 
 ```text
 10 seconds
@@ -359,18 +392,99 @@ Artwork and name localization are best-effort.
 
 Failure to download artwork or localize a name should not prevent the widget from rendering usable raid information.
 
-`send-pokemon` compares the raw normalized ScrapedDuck roster before localization and artwork retrieval.
+`send-pokemon-raids` localizes the normalized raid roster before calculating its rendering-relevant fingerprint.
+
+This is intentional: a localization change may alter what is displayed even when the raw ScrapedDuck roster is unchanged.
 
 If the persisted fingerprint matches:
 
-- localization is skipped
+- localization has already been attempted
 - artwork retrieval is skipped
 - rendering is skipped
 - device delivery is skipped
 
-`send-pokemon --force` bypasses change detection.
+`send-pokemon-raids --force` bypasses change detection.
 
-Do not add unrelated Pokémon GO data unless an implemented widget needs it.
+`RaidRoster.shadow_five_star` and `RaidTier.SHADOW_FIVE_STAR` are both currently used by the renderer and must not be removed as dead code.
+
+Do not add unrelated Pokémon GO raid data unless an implemented widget needs it.
+
+## Pokémon GO Events
+
+The event widget currently supports:
+
+```text
+Community Day
+Community Day Classic
+Spotlight Hour
+Max Monday
+```
+
+The fixed category order is:
+
+```text
+Community Day
+Community Day Classic
+Spotlight Hour
+Max Monday
+```
+
+Missing categories are omitted.
+
+Novachrono selects the current or next relevant occurrence for each supported category.
+
+When one event contains multiple featured Pokémon, each featured Pokémon receives its own animation frame.
+
+Event frames currently use a duration of:
+
+```text
+30 seconds
+```
+
+The event renderer shows:
+
+- event-category header
+- featured Pokémon artwork or placeholder
+- localized Pokémon name
+- event date
+- event time where appropriate
+- event bonus where available
+- shiny indicator where available
+
+Community Day, Community Day Classic, and Spotlight Hour display date and time.
+
+Max Monday currently displays the date only.
+
+Current date formats are:
+
+```text
+de_DE -> DD.MM.
+en_US -> MM/DD
+```
+
+Event bonus rendering normalizes the multiplication sign to ASCII `x` and renders the bonus in uppercase.
+
+Event artwork URLs may come from ScrapedDuck or be filled through PokeAPI when missing.
+
+The artwork downloader remains best-effort.
+
+`send-pokemon-events` calculates its fingerprint from the enriched and localized event schedule.
+
+If the persisted fingerprint matches:
+
+- artwork download is skipped
+- rendering is skipped
+- device delivery is skipped
+
+`send-pokemon-events --force` bypasses change detection.
+
+Unsupported ScrapedDuck event categories are ignored.
+
+Supported event entries with missing or unparseable start or end timestamps are ignored rather than causing the entire event schedule to fail.
+
+A supported event with parseable timestamps but an invalid time range where the end is not after the start remains an error.
+
+Do not add additional event categories unless an implemented widget requires them.
 
 ## Display State
 
@@ -383,13 +497,14 @@ Persistent display state lives under:
 Current files:
 
 ```text
+events.state
+raids.state
 weather.state
-pokemon-go.state
 ```
 
 Each file contains one SHA-256 fingerprint.
 
-Keep weather and Pokémon GO state separate.
+Keep weather, raid, and event state separate.
 
 They are independent one-shot commands and may run in separate processes.
 
@@ -409,7 +524,11 @@ Do not store raw weather data, Pokémon data, credentials, tokens, or other sens
 
 It always sends all five displays regardless of stored fingerprints.
 
-It updates weather and Pokémon GO state only after the corresponding panel has been delivered successfully.
+It updates weather, raid, and event state only after the corresponding panel has been delivered successfully.
+
+If an individual display fails, generic delivery retries once after five seconds.
+
+If the retry also fails, `send-dashboard` continues attempting the remaining displays and reports the failed displays afterward.
 
 This command is also the manual recovery mechanism if the Times Gate has restarted or lost its displayed state while local fingerprints still exist.
 
@@ -425,6 +544,14 @@ The current supported locales are:
 de_DE
 en_US
 ```
+
+Locale currently affects:
+
+- weather UI text
+- clock date formatting
+- event date formatting
+- PokeAPI Pokémon-name localization
+- rendering-relevant fingerprints where applicable
 
 Keep the translation system simple unless requirements justify a more advanced localization library.
 
@@ -452,8 +579,18 @@ Current external sources are:
 Open-Meteo
 ScrapedDuck
 PokeAPI
-Pokémon artwork URLs supplied by ScrapedDuck
 ```
+
+Current responsibilities include:
+
+- Open-Meteo for current weather
+- ScrapedDuck for raid rosters
+- ScrapedDuck for supported Pokémon GO events
+- ScrapedDuck artwork URLs where available
+- PokeAPI for Pokémon name localization
+- PokeAPI for missing event artwork URLs
+
+Artwork images are fetched separately and normalized before rendering.
 
 Data-source code should:
 
@@ -463,6 +600,10 @@ Data-source code should:
 - avoid logging secrets
 - be testable without real network access
 - convert provider-specific responses into internal application models
+
+External feeds may contain incomplete data.
+
+Adapters should be strict about data needed for correctness but should not let one unusable optional entry unnecessarily break unrelated usable data.
 
 Prefer documented APIs or feeds over scraping where practical.
 
@@ -515,7 +656,7 @@ unless there is a demonstrated requirement.
 
 Novachrono commands are intentionally one-shot operations.
 
-Do not add a permanently running application scheduler merely to update the clock, weather, or Pokémon GO widgets.
+Do not add a permanently running application scheduler merely to update the clock, weather, raid, or event widgets.
 
 The intended Raspberry Pi deployment uses external scheduling, preferably systemd services and timers.
 
@@ -524,7 +665,8 @@ Target schedule:
 ```text
 clock    -> every minute
 weather  -> :00 / :15 / :30 / :45
-pokemon  -> every full hour
+raids    -> every full hour
+events   -> every full hour
 ```
 
 At full hours, several commands may become eligible simultaneously.
@@ -533,7 +675,7 @@ Their Times Gate transfers must be serialized at deployment level so independent
 
 A shared deployment-level lock such as `flock` is preferred over adding scheduler coordination to the Python application.
 
-State-file concurrency does not require a shared lock because weather and Pokémon GO use separate state files.
+State-file concurrency does not require a shared state lock because weather, raids, and events use separate state files.
 
 A full `send-dashboard` synchronization after boot is expected to be part of the deployment design.
 
@@ -556,6 +698,17 @@ NOVACHRONO_WEATHER_LONGITUDE
 NOVACHRONO_TIMES_GATE_HOST
 NOVACHRONO_TIMES_GATE_TOKEN
 ```
+
+Supported temperature-unit values are:
+
+```text
+C
+CELSIUS
+F
+FAHRENHEIT
+```
+
+Temperature-unit values are case-insensitive.
 
 Process environment variables override `.env`.
 
@@ -610,9 +763,26 @@ Test public behavior through public APIs where practical.
 
 Private helpers normally do not need separate tests when their behavior is already covered through a public entry point.
 
+Tests do not need to mirror every private production module.
+
+Group tests by meaningful public behavior and responsibility.
+
 When production behavior changes, remove or update tests that only describe obsolete behavior.
 
 Do not preserve meaningless tests purely to maintain a test count.
+
+Current notable test structure includes:
+
+```text
+tests/
+├── cli/
+├── design/
+├── outputs/
+├── sources/
+└── widgets/
+```
+
+The CLI tests are split by responsibility rather than kept in one monolithic test module.
 
 Current local checks are:
 
@@ -630,11 +800,13 @@ Hardware-related changes should additionally be smoke-tested on a Times Gate whe
 
 ```shell
 uv run novachrono send-dashboard
-uv run novachrono send-weather
-uv run novachrono send-pokemon
 uv run novachrono send-clock
+uv run novachrono send-weather
+uv run novachrono send-pokemon-raids
+uv run novachrono send-pokemon-events
 uv run novachrono send-weather --force
-uv run novachrono send-pokemon --force
+uv run novachrono send-pokemon-raids --force
+uv run novachrono send-pokemon-events --force
 ```
 
 ## Formatting and Linting
@@ -653,6 +825,10 @@ uv run ruff check .
 ```
 
 Do not use unsafe automatic fixes unless the change has been reviewed and is clearly appropriate.
+
+Avoid visually ambiguous Unicode characters in source code when Ruff flags them.
+
+When a Unicode character is semantically required, an explicit escape such as `\u00d7` is preferable to suppressing a useful lint rule.
 
 ## Code Changes
 
@@ -694,6 +870,10 @@ Examples of abstractions that are currently unnecessary unless requirements chan
 Duplication is acceptable when removing it would create a more complicated dependency structure.
 
 DRY is a guideline, not a requirement to merge unrelated concepts.
+
+Do not split a cohesive module solely because it has become long.
+
+Prefer responsibility boundaries over line-count boundaries.
 
 ## Reviews
 
@@ -750,6 +930,12 @@ Do not document planned features as if they already exist.
 Clearly distinguish implemented behavior from roadmap items.
 
 Examples and CLI commands should reflect actual current behavior.
+
+The README is user-facing documentation.
+
+AGENTS.md is primarily implementation and maintenance guidance and may contain more precise architectural constraints than the README.
+
+Avoid unnecessarily duplicating volatile implementation details across several documentation files unless they help prevent likely maintenance mistakes.
 
 ## Guiding Principle
 
