@@ -12,6 +12,7 @@ from novachrono.units import TemperatureUnit
 
 DEFAULT_ENV_FILENAME: Final = ".env"
 DEFAULT_TIMEZONE_NAME: Final = "Europe/Berlin"
+DEFAULT_TIMES_GATE_HARDWARE_VERSION: Final = 402
 
 TIMEZONE_VARIABLE: Final = "NOVACHRONO_TIMEZONE"
 LOCALE_VARIABLE: Final = "NOVACHRONO_LOCALE"
@@ -22,6 +23,12 @@ WEATHER_LONGITUDE_VARIABLE: Final = "NOVACHRONO_WEATHER_LONGITUDE"
 
 TIMES_GATE_HOST_VARIABLE: Final = "NOVACHRONO_TIMES_GATE_HOST"
 TIMES_GATE_TOKEN_VARIABLE: Final = "NOVACHRONO_TIMES_GATE_TOKEN"
+TIMES_GATE_HARDWARE_VERSION_VARIABLE: Final = "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION"
+
+_SUPPORTED_TIMES_GATE_HARDWARE_VERSIONS: Final = (
+    400,
+    402,
+)
 
 _TEMPERATURE_UNIT_ALIASES: Final = {
     "C": TemperatureUnit.CELSIUS,
@@ -49,6 +56,7 @@ class TimesGateSettings:
 
     host: str | None
     local_token: str | None
+    hardware_version: int = DEFAULT_TIMES_GATE_HARDWARE_VERSION
 
 
 @dataclass(frozen=True)
@@ -81,7 +89,7 @@ def load_config(env_file: Path | None = None) -> AppConfig:
 
     try:
         timezone = ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError as error:
+    except (ZoneInfoNotFoundError, ValueError) as error:
         raise ConfigError(f"Unknown timezone: {timezone_name}") from error
 
     locale = _read_optional_value(values, LOCALE_VARIABLE) or DEFAULT_LOCALE
@@ -99,6 +107,9 @@ def load_config(env_file: Path | None = None) -> AppConfig:
     times_gate = TimesGateSettings(
         host=_read_optional_value(values, TIMES_GATE_HOST_VARIABLE),
         local_token=_read_optional_value(values, TIMES_GATE_TOKEN_VARIABLE),
+        hardware_version=_parse_times_gate_hardware_version(
+            _read_optional_value(values, TIMES_GATE_HARDWARE_VERSION_VARIABLE)
+        ),
     )
 
     return AppConfig(
@@ -141,6 +152,25 @@ def _parse_temperature_unit(value: str | None) -> TemperatureUnit:
         raise ConfigError(
             f"Unsupported temperature unit: {value}. Supported values: {supported}"
         ) from error
+
+
+def _parse_times_gate_hardware_version(value: str | None) -> int:
+    if value is None:
+        return DEFAULT_TIMES_GATE_HARDWARE_VERSION
+
+    try:
+        hardware_version = int(value)
+    except ValueError as error:
+        raise ConfigError(f"Invalid Times Gate hardware version: {value}") from error
+
+    if hardware_version not in _SUPPORTED_TIMES_GATE_HARDWARE_VERSIONS:
+        supported = ", ".join(str(version) for version in _SUPPORTED_TIMES_GATE_HARDWARE_VERSIONS)
+
+        raise ConfigError(
+            f"Unsupported Times Gate hardware version: {value}. Supported values: {supported}"
+        )
+
+    return hardware_version
 
 
 def _parse_optional_float(

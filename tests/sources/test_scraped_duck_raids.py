@@ -197,6 +197,48 @@ def test_fetch_raid_roster_rejects_insecure_artwork_url(
 
 
 @patch("novachrono.sources.scraped_duck._common.urlopen")
+def test_fetch_raid_roster_ignores_malformed_artwork_url(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response(
+        [
+            _create_raid(
+                name="Zacian",
+                tier="5-Star Raids",
+                image_url="https://[invalid",
+            ),
+        ]
+    )
+
+    roster = fetch_raid_roster()
+
+    assert len(roster.five_star) == 1
+    assert roster.five_star[0].name == "Zacian"
+    assert roster.five_star[0].artwork_url is None
+
+
+@patch("novachrono.sources.scraped_duck._common.urlopen")
+def test_fetch_raid_roster_ignores_malformed_artwork_port(
+    mocked_urlopen: MagicMock,
+) -> None:
+    mocked_urlopen.return_value = _create_response(
+        [
+            _create_raid(
+                name="Zacian",
+                tier="5-Star Raids",
+                image_url="https://example.com:invalid/zacian.png",
+            ),
+        ]
+    )
+
+    roster = fetch_raid_roster()
+
+    assert len(roster.five_star) == 1
+    assert roster.five_star[0].name == "Zacian"
+    assert roster.five_star[0].artwork_url is None
+
+
+@patch("novachrono.sources.scraped_duck._common.urlopen")
 def test_fetch_raid_roster_preserves_multiple_bosses(
     mocked_urlopen: MagicMock,
 ) -> None:
@@ -285,6 +327,41 @@ def test_fetch_raid_roster_ignores_other_tiers(
     assert roster.five_star == ()
     assert roster.shadow_five_star == ()
     assert roster.mega == ()
+
+
+@pytest.mark.parametrize(
+    "tier",
+    [
+        [],
+        {},
+        5,
+        True,
+        None,
+    ],
+)
+@patch("novachrono.sources.scraped_duck._common.urlopen")
+def test_fetch_raid_roster_ignores_invalid_tier_type(
+    mocked_urlopen: MagicMock,
+    tier: object,
+) -> None:
+    mocked_urlopen.return_value = _create_response(
+        [
+            {
+                "name": "Broken Entry",
+                "tier": tier,
+                "canBeShiny": True,
+                "image": "https://example.com/broken.png",
+            },
+            _create_raid(
+                name="Zacian",
+                tier="5-Star Raids",
+            ),
+        ]
+    )
+
+    roster = fetch_raid_roster()
+
+    assert [boss.name for boss in roster.five_star] == ["Zacian"]
 
 
 @patch("novachrono.sources.scraped_duck._common.urlopen")

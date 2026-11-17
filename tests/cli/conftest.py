@@ -31,6 +31,7 @@ def app_config() -> AppConfig:
         times_gate=TimesGateSettings(
             host="192.168.178.50",
             local_token="secret",
+            hardware_version=402,
         ),
     )
 

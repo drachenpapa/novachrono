@@ -71,9 +71,14 @@ def _read_optional_image_url(
         return None
 
     normalized_value = value.strip()
-    parsed_url = urlparse(normalized_value)
 
-    if parsed_url.scheme.casefold() != "https" or parsed_url.hostname is None:
+    try:
+        parsed_url = urlparse(normalized_value)
+        hostname, _ = parsed_url.hostname, parsed_url.port
+    except ValueError:
+        return None
+
+    if parsed_url.scheme.casefold() != "https" or hostname is None:
         return None
 
     return normalized_value

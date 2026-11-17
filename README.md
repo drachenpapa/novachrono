@@ -10,7 +10,7 @@ It renders a consistent five-screen dashboard, generates local previews, and sen
 
 Novachrono renders five 128 × 128 pixel panels:
 
-1. Placeholder
+1. Matrix animation
 2. Current weather
 3. Clock and date
 4. Pokémon GO raids
@@ -20,6 +20,7 @@ All panels use the same custom HUD-style design.
 
 Current widgets include:
 
+- Matrix-style animation
 - current weather from Open-Meteo
 - animated rain and fog
 - Celsius and Fahrenheit support
@@ -46,13 +47,13 @@ The project keeps configuration, data retrieval, models, rendering, orchestratio
 External data sources
         |
         v
-     sources/
+      sources/
         |
         v
-      models/
+       models/
         |
         v
-      widgets/
+       widgets/
         |
         v
  Pillow images / frames
@@ -62,10 +63,10 @@ External data sources
         +-- CLI orchestration
                 |
                 v
-             outputs/
+              outputs/
                 |
                 v
-         Divoom Times Gate
+          Divoom Times Gate
 ```
 
 Current source structure:
@@ -95,6 +96,7 @@ src/novachrono/
 │   └── scraped_duck/
 └── widgets/
     ├── clock.py
+    ├── matrix.py
     ├── pokemon_go/
     └── weather/
 ```
@@ -170,6 +172,7 @@ NOVACHRONO_WEATHER_LONGITUDE=8.80169
 
 NOVACHRONO_TIMES_GATE_HOST=192.168.1.100
 NOVACHRONO_TIMES_GATE_TOKEN=replace-me
+NOVACHRONO_TIMES_GATE_HARDWARE_VERSION=402
 ```
 
 Supported temperature-unit values are:
@@ -182,6 +185,24 @@ FAHRENHEIT
 ```
 
 Values are case-insensitive.
+
+Supported Times Gate hardware versions are:
+
+```text
+400
+402
+```
+
+The default is `402`.
+
+The hardware version determines which local Times Gate transport Novachrono uses:
+
+```text
+400 -> /post + Device/PlayGif
+402 -> :9000/divoom_api + Draw/SendHttpGif
+```
+
+Hardware version 400 uses a temporary local HTTP server so that the Times Gate can retrieve the generated GIF. The device must therefore be able to reach the Novachrono host over the local network while the transfer is in progress.
 
 Process environment variables override values from `.env`.
 
@@ -336,7 +357,7 @@ Sends all five displays.
 
 `send-dashboard` always performs a full synchronization, regardless of cached state.
 
-Static widgets are sent as individual images. Widgets with multiple frames are transferred using the native Times Gate animation protocol.
+Static widgets are sent as individual images. Widgets with multiple frames are transferred using the Times Gate animation mechanism appropriate for the configured hardware version.
 
 If an individual display fails, Novachrono retries the delivery once after five seconds. If the retry also fails, the remaining displays are still processed.
 
@@ -374,6 +395,8 @@ Downloaded Pokémon artwork is normalized before rendering.
 Source adapters validate external responses and isolate provider-specific data formats from the rest of the application.
 
 Because external community-maintained data can occasionally contain incomplete entries, unsupported Pokémon GO events and supported events without usable timestamps are ignored rather than preventing the entire dashboard from rendering.
+
+Malformed optional artwork URLs and unsupported raid-tier values are ignored rather than breaking otherwise usable feed data.
 
 ## Scheduling
 
@@ -439,10 +462,14 @@ The automated test suite covers, among other things:
 - display-state fingerprints
 - change detection
 - Times Gate request payloads and error handling
+- hardware-version-specific Times Gate transport behavior
+- local GIF serving for hardware version 400
 - delivery retry behavior
 - CLI routing and orchestration
 
 Tests use mocked external services and do not require access to real APIs or a physical Times Gate.
+
+The hardware-version 400 HTTP handler is additionally exercised through a local loopback server.
 
 Live external-data behavior and hardware communication should additionally be verified with the corresponding CLI commands.
 
@@ -451,6 +478,7 @@ Live external-data behavior and hardware communication should additionally be ve
 Completed:
 
 - shared five-panel HUD design
+- Matrix animation widget
 - clock widget
 - weather widget
 - Pokémon GO raid widget
@@ -460,6 +488,7 @@ Completed:
 - Pokémon name localization
 - live external data sources
 - native Times Gate animations
+- Times Gate hardware versions 400 and 402
 - persistent change detection
 - forced widget refreshes
 - device-delivery retry

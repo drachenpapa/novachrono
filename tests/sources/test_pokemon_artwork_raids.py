@@ -6,11 +6,40 @@ import pytest
 from PIL import Image
 
 from novachrono.models.pokemon_go import RaidBoss, RaidRoster
-from novachrono.sources.pokemon_artwork import fetch_raid_artwork
+from novachrono.sources.pokemon_artwork import (
+    MAX_ARTWORK_DOWNLOAD_BYTES,
+    MAX_ARTWORK_PIXELS,
+    fetch_raid_artwork,
+)
 
 
 def test_fetch_raid_artwork_loads_and_trims_artwork() -> None:
     artwork_url = "https://example.com/vesprit.png"
+
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+        mega=(),
+    )
+
+    with patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen:
+        response = _create_response(_create_artwork_bytes())
+        mocked_urlopen.return_value = response
+
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert list(artwork_by_url) == [artwork_url]
+    assert artwork_by_url[artwork_url].mode == "RGBA"
+    assert artwork_by_url[artwork_url].size == (2, 2)
+
+    response.__enter__.return_value.read.assert_called_once_with(MAX_ARTWORK_DOWNLOAD_BYTES + 1)
+
+
+def test_fetch_raid_artwork_accepts_valid_explicit_https_port() -> None:
+    artwork_url = "https://example.com:8443/vesprit.png"
 
     roster = RaidRoster(
         five_star=(
@@ -27,8 +56,7 @@ def test_fetch_raid_artwork_loads_and_trims_artwork() -> None:
         artwork_by_url = fetch_raid_artwork(roster)
 
     assert list(artwork_by_url) == [artwork_url]
-    assert artwork_by_url[artwork_url].mode == "RGBA"
-    assert artwork_by_url[artwork_url].size == (2, 2)
+    assert mocked_urlopen.call_count == 1
 
 
 def test_fetch_raid_artwork_loads_shadow_five_star_artwork() -> None:
@@ -116,6 +144,40 @@ def test_fetch_raid_artwork_ignores_insecure_url() -> None:
     mocked_urlopen.assert_not_called()
 
 
+def test_fetch_raid_artwork_ignores_malformed_url() -> None:
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url="https://[invalid",
+            ),
+        ),
+        mega=(),
+    )
+
+    with patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen:
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+    mocked_urlopen.assert_not_called()
+
+
+def test_fetch_raid_artwork_ignores_malformed_port() -> None:
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url="https://example.com:invalid/vesprit.png",
+            ),
+        ),
+        mega=(),
+    )
+
+    with patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen:
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+    mocked_urlopen.assert_not_called()
+
+
 def test_fetch_raid_artwork_ignores_connection_error() -> None:
     artwork_url = "https://example.com/vesprit.png"
 
@@ -178,6 +240,86 @@ def test_fetch_raid_artwork_ignores_invalid_image() -> None:
     assert artwork_by_url == {}
 
 
+def test_fetch_raid_artwork_ignores_oversized_download() -> None:
+    artwork_url = "https://example.com/vesprit.png"
+
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+        mega=(),
+    )
+
+    oversized_data = b"x" * (MAX_ARTWORK_DOWNLOAD_BYTES + 1)
+
+    with patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen:
+        mocked_urlopen.return_value = _create_response(oversized_data)
+
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+
+
+def test_fetch_raid_artwork_ignores_oversized_decoded_image() -> None:
+    artwork_url = "https://example.com/oversized.png"
+
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+        mega=(),
+    )
+
+    image_data = _create_large_artwork_bytes()
+
+    assert len(image_data) <= MAX_ARTWORK_DOWNLOAD_BYTES
+
+    original_convert = Image.Image.convert
+
+    with (
+        patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen,
+        patch.object(Image.Image, "convert", autospec=True) as mocked_convert,
+    ):
+        mocked_urlopen.return_value = _create_response(image_data)
+
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+    mocked_convert.assert_not_called()
+
+    Image.Image.convert = original_convert
+
+
+def test_fetch_raid_artwork_ignores_pillow_decompression_bomb() -> None:
+    artwork_url = "https://example.com/bomb.png"
+
+    roster = RaidRoster(
+        five_star=(
+            _create_boss(
+                artwork_url=artwork_url,
+            ),
+        ),
+        mega=(),
+    )
+
+    with (
+        patch("novachrono.sources.pokemon_artwork.urlopen") as mocked_urlopen,
+        patch(
+            "novachrono.sources.pokemon_artwork.Image.open",
+            side_effect=Image.DecompressionBombError("too many pixels"),
+        ),
+    ):
+        mocked_urlopen.return_value = _create_response(b"fake-image-data")
+
+        artwork_by_url = fetch_raid_artwork(roster)
+
+    assert artwork_by_url == {}
+
+
 def test_fetch_raid_artwork_rejects_invalid_timeout() -> None:
     with pytest.raises(
         ValueError,
@@ -218,6 +360,24 @@ def _create_artwork_bytes() -> bytes:
                 (x, y),
                 (255, 255, 255, 255),
             )
+
+    buffer = io.BytesIO()
+    image.save(
+        buffer,
+        format="PNG",
+    )
+
+    return buffer.getvalue()
+
+
+def _create_large_artwork_bytes() -> bytes:
+    width = 4_001
+    height = (MAX_ARTWORK_PIXELS // width) + 1
+
+    image = Image.new(
+        mode="1",
+        size=(width, height),
+    )
 
     buffer = io.BytesIO()
     image.save(

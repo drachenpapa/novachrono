@@ -92,10 +92,10 @@ Pillow images / animation frames
      +--> CLI orchestration
              |
              v
-        Output delivery
+         Output delivery
              |
              v
-        Times Gate adapter
+         Times Gate adapter
 ```
 
 This is a conceptual structure, not a requirement to create an interface or class for every layer.
@@ -157,7 +157,7 @@ This is a conceptual structure, not a requirement to create an interface or clas
 - implements the Times Gate local API adapter
 - validates device-specific data
 - encodes images
-- sends static images and native animations
+- sends static images and animations using the transport appropriate for the configured hardware version
 
 `preview.py`
 
@@ -197,7 +197,7 @@ The dashboard contains five independently addressable 128 × 128 panels.
 Current assignment:
 
 ```text
-0 -> placeholder
+0 -> Matrix animation
 1 -> current weather
 2 -> clock and date
 3 -> Pokémon GO raids
@@ -205,6 +205,8 @@ Current assignment:
 ```
 
 The physical displays are numbered 1 through 5.
+
+The Matrix widget currently renders a deterministic ten-frame cyan animation and does not use external data.
 
 The weather widget uses live data from Open-Meteo.
 
@@ -217,7 +219,7 @@ The Pokémon GO widgets use:
 - PokeAPI for missing event artwork URLs
 - the Pokémon artwork source adapter for downloading and normalizing artwork
 
-Some weather conditions and multi-frame Pokémon GO states use native Times Gate animations.
+Some weather conditions and multi-frame Pokémon GO states use Times Gate animations.
 
 ## Rendering
 
@@ -592,6 +594,8 @@ Current responsibilities include:
 
 Artwork images are fetched separately and normalized before rendering.
 
+Artwork downloads are best-effort and size-limited.
+
 Data-source code should:
 
 - use explicit timeouts
@@ -601,9 +605,13 @@ Data-source code should:
 - be testable without real network access
 - convert provider-specific responses into internal application models
 
-External feeds may contain incomplete data.
+External feeds may contain incomplete or malformed data.
 
 Adapters should be strict about data needed for correctness but should not let one unusable optional entry unnecessarily break unrelated usable data.
+
+Unsupported or malformed raid-tier values are ignored.
+
+Malformed optional artwork URLs are treated as unavailable artwork.
 
 Prefer documented APIs or feeds over scraping where practical.
 
@@ -630,12 +638,32 @@ The adapter should:
 - avoid exposing device tokens
 - remain independent of widget rendering
 
-The Times Gate adapter currently supports:
+The Times Gate adapter currently supports hardware versions:
 
-- static image delivery
-- native multi-frame animation delivery
+```text
+400
+402
+```
 
-Native animations should use the Times Gate animation mechanism rather than repeated Python-side uploads.
+Hardware version `402` is the default.
+
+Current transport behavior:
+
+```text
+400 -> http://<host>/post
+       Device/PlayGif
+       pull-based GIF retrieval from a temporary Novachrono HTTP server
+
+402 -> http://<host>:9000/divoom_api
+       Draw/SendHttpGif
+       Base64-encoded image frames pushed to the device
+```
+
+Hardware version 400 requires the Times Gate to be able to reach the temporary Novachrono HTTP server over the local network.
+
+Hardware version 400 animations are encoded as one multi-frame GIF and fetched by the device.
+
+Hardware version 402 animations are sent as native multi-frame `Draw/SendHttpGif` requests using one picture ID and sequential frame offsets.
 
 Generic delivery currently retries one failed Times Gate delivery once after five seconds.
 
@@ -697,6 +725,7 @@ NOVACHRONO_WEATHER_LATITUDE
 NOVACHRONO_WEATHER_LONGITUDE
 NOVACHRONO_TIMES_GATE_HOST
 NOVACHRONO_TIMES_GATE_TOKEN
+NOVACHRONO_TIMES_GATE_HARDWARE_VERSION
 ```
 
 Supported temperature-unit values are:
@@ -709,6 +738,15 @@ FAHRENHEIT
 ```
 
 Temperature-unit values are case-insensitive.
+
+Supported Times Gate hardware versions are:
+
+```text
+400
+402
+```
+
+The default Times Gate hardware version is `402`.
 
 Process environment variables override `.env`.
 
@@ -762,6 +800,8 @@ Avoid tests that merely freeze arbitrary implementation details such as incident
 Test public behavior through public APIs where practical.
 
 Private helpers normally do not need separate tests when their behavior is already covered through a public entry point.
+
+A focused private-helper test is acceptable when it exercises concrete infrastructure behavior that would otherwise be fully mocked, such as the temporary hardware-400 GIF HTTP handler.
 
 Tests do not need to mirror every private production module.
 

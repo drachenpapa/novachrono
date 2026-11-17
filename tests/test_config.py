@@ -13,6 +13,7 @@ CONFIG_ENVIRONMENT_VARIABLES = (
     "NOVACHRONO_WEATHER_LONGITUDE",
     "NOVACHRONO_TIMES_GATE_HOST",
     "NOVACHRONO_TIMES_GATE_TOKEN",
+    "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION",
 )
 
 
@@ -42,6 +43,7 @@ def test_load_config_uses_defaults(
 
     assert config.times_gate.host is None
     assert config.times_gate.local_token is None
+    assert config.times_gate.hardware_version == 402
 
 
 def test_load_config_reads_dotenv(
@@ -58,6 +60,7 @@ def test_load_config_reads_dotenv(
         "NOVACHRONO_WEATHER_LONGITUDE=8.80169",
         "NOVACHRONO_TIMES_GATE_HOST=192.168.178.50",
         "NOVACHRONO_TIMES_GATE_TOKEN=secret",
+        "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION=400",
     )
 
     config = load_config(env_file)
@@ -75,6 +78,8 @@ def test_load_config_reads_dotenv(
 
     assert config.times_gate.local_token == "secret"
 
+    assert config.times_gate.hardware_version == 400
+
 
 def test_environment_overrides_dotenv(
     tmp_path: Path,
@@ -90,6 +95,7 @@ def test_environment_overrides_dotenv(
         "NOVACHRONO_WEATHER_LONGITUDE=2",
         "NOVACHRONO_TIMES_GATE_HOST=192.168.1.100",
         "NOVACHRONO_TIMES_GATE_TOKEN=file-token",
+        "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION=400",
     )
 
     monkeypatch.setenv(
@@ -122,6 +128,11 @@ def test_environment_overrides_dotenv(
         "environment-token",
     )
 
+    monkeypatch.setenv(
+        "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION",
+        "402",
+    )
+
     config = load_config(env_file)
 
     assert config.locale == "en_US"
@@ -135,6 +146,8 @@ def test_environment_overrides_dotenv(
     assert config.times_gate.host == "192.168.178.50"
 
     assert config.times_gate.local_token == "environment-token"
+
+    assert config.times_gate.hardware_version == 402
 
 
 def test_blank_weather_values_become_none(
@@ -174,7 +187,7 @@ def test_weather_coordinates_must_be_configured_together(
 
     with pytest.raises(
         ConfigError,
-        match=("latitude and longitude must be configured together"),
+        match="latitude and longitude must be configured together",
     ):
         load_config(env_file)
 
@@ -212,8 +225,8 @@ def test_weather_coordinates_accept_boundary_values(
 
     _write_env(
         env_file,
-        (f"NOVACHRONO_WEATHER_LATITUDE={latitude}"),
-        (f"NOVACHRONO_WEATHER_LONGITUDE={longitude}"),
+        f"NOVACHRONO_WEATHER_LATITUDE={latitude}",
+        f"NOVACHRONO_WEATHER_LONGITUDE={longitude}",
     )
 
     config = load_config(env_file)
@@ -311,6 +324,68 @@ def test_blank_times_gate_values_become_none(
 
     assert config.times_gate.host is None
     assert config.times_gate.local_token is None
+    assert config.times_gate.hardware_version == 402
+
+
+@pytest.mark.parametrize(
+    "hardware_version",
+    [
+        "400",
+        "402",
+    ],
+)
+def test_times_gate_hardware_version_accepts_supported_values(
+    hardware_version: str,
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        f"NOVACHRONO_TIMES_GATE_HARDWARE_VERSION={hardware_version}",
+    )
+
+    config = load_config(env_file)
+
+    assert config.times_gate.hardware_version == int(hardware_version)
+
+
+def test_invalid_times_gate_hardware_version_raises_config_error(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION=not-a-number",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Invalid Times Gate hardware version",
+    ):
+        load_config(env_file)
+
+
+def test_unsupported_times_gate_hardware_version_raises_config_error(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TIMES_GATE_HARDWARE_VERSION=401",
+    )
+
+    with pytest.raises(
+        ConfigError,
+    ) as error:
+        load_config(env_file)
+
+    message = str(error.value)
+
+    assert "Unsupported Times Gate hardware version: 401" in message
+    assert "Supported values: 400, 402" in message
 
 
 def test_invalid_timezone_raises_config_error(
@@ -320,7 +395,24 @@ def test_invalid_timezone_raises_config_error(
 
     _write_env(
         env_file,
-        ("NOVACHRONO_TIMEZONE=Definitely/Not-A-Timezone"),
+        "NOVACHRONO_TIMEZONE=Definitely/Not-A-Timezone",
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Unknown timezone",
+    ):
+        load_config(env_file)
+
+
+def test_malformed_timezone_raises_config_error(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+
+    _write_env(
+        env_file,
+        "NOVACHRONO_TIMEZONE=../Europe/Berlin",
     )
 
     with pytest.raises(
@@ -396,7 +488,7 @@ def test_temperature_unit_accepts_supported_values(
 
     _write_env(
         env_file,
-        (f"NOVACHRONO_TEMPERATURE_UNIT={configured_value}"),
+        f"NOVACHRONO_TEMPERATURE_UNIT={configured_value}",
     )
 
     config = load_config(env_file)
@@ -422,7 +514,6 @@ def test_invalid_temperature_unit_raises_config_error(
     message = str(error.value)
 
     assert "Unsupported temperature unit: K" in message
-
     assert "Supported values: C, CELSIUS, F, FAHRENHEIT" in message
 
 

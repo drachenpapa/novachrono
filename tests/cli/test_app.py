@@ -169,6 +169,7 @@ def test_check_device_uses_configured_connection(
 
     assert config.host == "192.168.178.50"
     assert config.local_token == "secret"
+    assert config.hardware_version == 402
 
 
 @patch("novachrono.cli._common.TimesGateClient")
@@ -203,6 +204,7 @@ def test_cli_options_override_configuration(
 
     assert config.host == "10.0.0.50"
     assert config.local_token == "override-token"
+    assert config.hardware_version == 402
 
 
 @patch("novachrono.cli._load_app_config")
@@ -215,6 +217,7 @@ def test_check_device_reports_missing_configuration(
         times_gate=TimesGateSettings(
             host=None,
             local_token=None,
+            hardware_version=400,
         ),
     )
 

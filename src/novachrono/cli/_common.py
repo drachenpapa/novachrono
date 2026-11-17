@@ -187,9 +187,13 @@ def _create_times_gate_client(
     host: str | None,
     local_token: str | None,
 ) -> TimesGateClient:
-    resolved_host = _resolve_value(override=host, configured=app_config.times_gate.host)
+    resolved_host = _resolve_value(
+        override=host,
+        configured=app_config.times_gate.host,
+    )
     resolved_token = _resolve_value(
-        override=local_token, configured=app_config.times_gate.local_token
+        override=local_token,
+        configured=app_config.times_gate.local_token,
     )
 
     if resolved_host is None or resolved_token is None:
@@ -205,7 +209,11 @@ def _create_times_gate_client(
         _exit_with_error(f"Missing required configuration: {joined_variables}")
 
     try:
-        times_gate_config = TimesGateConfig(host=resolved_host, local_token=resolved_token)
+        times_gate_config = TimesGateConfig(
+            host=resolved_host,
+            local_token=resolved_token,
+            hardware_version=app_config.times_gate.hardware_version,
+        )
     except ValueError as error:
         _exit_with_error(str(error))
 

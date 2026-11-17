@@ -13,6 +13,8 @@ from novachrono.models.pokemon_go import (
 )
 
 DEFAULT_TIMEOUT_SECONDS: Final = 6.0
+MAX_ARTWORK_DOWNLOAD_BYTES: Final = 5 * 1024 * 1024
+MAX_ARTWORK_PIXELS: Final = 16_000_000
 
 
 def fetch_raid_artwork(
@@ -46,7 +48,7 @@ def _fetch_artwork_urls(
     artwork_by_url: dict[str, Image.Image] = {}
 
     for artwork_url in artwork_urls:
-        artwork = _fetch_artwork(artwork_url, timeout_seconds=(timeout_seconds))
+        artwork = _fetch_artwork(artwork_url, timeout_seconds=timeout_seconds)
 
         if artwork is not None:
             artwork_by_url[artwork_url] = artwork
@@ -77,7 +79,7 @@ def _event_artwork_urls(schedule: EventSchedule) -> tuple[str, ...]:
         pokemon.artwork_url
         for event in events
         if event is not None
-        for pokemon in (event.featured_pokemon)
+        for pokemon in event.featured_pokemon
     )
 
 
@@ -117,23 +119,35 @@ def _fetch_artwork(
             request,
             timeout=timeout_seconds,
         ) as response:
-            image_data = response.read()
+            image_data = response.read(MAX_ARTWORK_DOWNLOAD_BYTES + 1)
     except URLError, TimeoutError:
+        return None
+
+    if len(image_data) > MAX_ARTWORK_DOWNLOAD_BYTES:
         return None
 
     try:
         with Image.open(io.BytesIO(image_data)) as downloaded_image:
+            width, height = downloaded_image.size
+
+            if width * height > MAX_ARTWORK_PIXELS:
+                return None
+
             artwork = downloaded_image.convert("RGBA")
-    except OSError:
+    except OSError, Image.DecompressionBombError:
         return None
 
     return _trim_transparent_border(artwork)
 
 
 def _is_https_url(value: str) -> bool:
-    parsed_url = urlparse(value)
+    try:
+        parsed_url = urlparse(value)
+        hostname, _ = parsed_url.hostname, parsed_url.port
+    except ValueError:
+        return False
 
-    return parsed_url.scheme.casefold() == "https" and parsed_url.hostname is not None
+    return parsed_url.scheme.casefold() == "https" and hostname is not None
 
 
 def _trim_transparent_border(image: Image.Image) -> Image.Image:

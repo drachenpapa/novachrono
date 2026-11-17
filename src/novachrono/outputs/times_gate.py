@@ -1,9 +1,12 @@
 import base64
 import io
 import json
+import socket
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Event, Thread
 from typing import Any, Final
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -12,10 +15,22 @@ from PIL import Image
 
 from novachrono.design import PANEL_COUNT, PANEL_SIZE
 
-DEFAULT_API_PORT: Final = 9000
-DEFAULT_API_PATH: Final = "/divoom_api"
+HARDWARE_VERSION_400: Final = 400
+HARDWARE_VERSION_402: Final = 402
+
+API_PORT_402: Final = 9000
+API_PATH_400: Final = "/post"
+API_PATH_402: Final = "/divoom_api"
+
+DEFAULT_HARDWARE_VERSION: Final = HARDWARE_VERSION_402
 DEFAULT_TIMEOUT_SECONDS: Final = 8.0
 LOCAL_API_SCHEME: Final = "http"
+
+_GIF_PATH: Final = "/novachrono.gif"
+_SUPPORTED_HARDWARE_VERSIONS: Final = (
+    HARDWARE_VERSION_400,
+    HARDWARE_VERSION_402,
+)
 
 
 class TimesGateError(RuntimeError):
@@ -28,6 +43,7 @@ class TimesGateConfig:
 
     host: str
     local_token: str
+    hardware_version: int = DEFAULT_HARDWARE_VERSION
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
     def __post_init__(self) -> None:
@@ -46,11 +62,17 @@ class TimesGateConfig:
         if not self.local_token.strip():
             raise ValueError("Times Gate local token must not be empty")
 
+        if self.hardware_version not in _SUPPORTED_HARDWARE_VERSIONS:
+            supported = ", ".join(str(version) for version in _SUPPORTED_HARDWARE_VERSIONS)
+            raise ValueError(
+                f"Unsupported Times Gate hardware version: {self.hardware_version}. "
+                f"Supported values: {supported}"
+            )
+
         if self.timeout_seconds <= 0:
             raise ValueError("Times Gate timeout must be greater than zero")
 
         object.__setattr__(self, "host", normalized_host)
-
         object.__setattr__(self, "local_token", self.local_token.strip())
 
     @property
@@ -58,7 +80,10 @@ class TimesGateConfig:
         """Return the local Times Gate API URL."""
 
         # The Times Gate local API is intentionally accessed over HTTP.
-        return f"{LOCAL_API_SCHEME}://{self.host}:{DEFAULT_API_PORT}{DEFAULT_API_PATH}"
+        if self.hardware_version == HARDWARE_VERSION_400:
+            return f"{LOCAL_API_SCHEME}://{self.host}{API_PATH_400}"
+
+        return f"{LOCAL_API_SCHEME}://{self.host}:{API_PORT_402}{API_PATH_402}"
 
 
 class TimesGateClient:
@@ -72,16 +97,12 @@ class TimesGateClient:
         self._next_picture_id = int(time.time())
 
     @property
-    def config(
-        self,
-    ) -> TimesGateConfig:
+    def config(self) -> TimesGateConfig:
         """Return the client configuration."""
 
         return self._config
 
-    def get_configuration(
-        self,
-    ) -> dict[str, Any]:
+    def get_configuration(self) -> dict[str, Any]:
         """Retrieve the current Times Gate configuration."""
 
         return self._post(
@@ -100,6 +121,13 @@ class TimesGateClient:
 
         _validate_panel_index(panel_index)
         _validate_image_size(image)
+
+        if self._config.hardware_version == HARDWARE_VERSION_400:
+            return self._play_gif(
+                panel_index,
+                (image,),
+                frame_duration_ms=1000,
+            )
 
         payload = {
             "Command": "Draw/SendHttpGif",
@@ -127,6 +155,15 @@ class TimesGateClient:
         _validate_panel_index(panel_index)
         _validate_animation(images, frame_duration_ms=frame_duration_ms)
 
+        if self._config.hardware_version == HARDWARE_VERSION_400:
+            return (
+                self._play_gif(
+                    panel_index,
+                    images,
+                    frame_duration_ms=frame_duration_ms,
+                ),
+            )
+
         lcd_array = _create_lcd_array(panel_index)
         picture_id = self._new_picture_id()
 
@@ -153,6 +190,49 @@ class TimesGateClient:
                 ) from error
 
         return tuple(responses)
+
+    def _play_gif(
+        self,
+        panel_index: int,
+        images: Sequence[Image.Image],
+        *,
+        frame_duration_ms: int,
+    ) -> dict[str, Any]:
+        gif_data = _encode_gif(images, frame_duration_ms=frame_duration_ms)
+
+        local_address = _resolve_local_address(self._config.host)
+        fetched = Event()
+
+        request_handler = _create_gif_request_handler(gif_data, fetched)
+
+        server = ThreadingHTTPServer((local_address, 0), request_handler)
+
+        server_thread = Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+
+        server_port = server.server_address[1]
+        gif_url = f"{LOCAL_API_SCHEME}://{local_address}:{server_port}{_GIF_PATH}"
+
+        try:
+            response = self._post(
+                {
+                    "Command": "Device/PlayGif",
+                    "LocalToken": self._config.local_token,
+                    "LcdArray": _create_lcd_array(panel_index),
+                    "FileName": [gif_url],
+                }
+            )
+
+            if not fetched.wait(timeout=self._config.timeout_seconds):
+                raise TimesGateError(
+                    "Times Gate accepted Device/PlayGif but did not fetch the GIF from Novachrono"
+                )
+
+            return response
+        finally:
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=1.0)
 
     def _new_picture_id(self) -> int:
         picture_id = self._next_picture_id
@@ -212,6 +292,72 @@ def encode_image(image: Image.Image) -> str:
     image.convert("RGB").save(buffer, format="JPEG", quality=90)
 
     return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _encode_gif(
+    images: Sequence[Image.Image],
+    *,
+    frame_duration_ms: int,
+) -> bytes:
+    frames = [image.convert("RGB") for image in images]
+
+    buffer = io.BytesIO()
+
+    frames[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=frame_duration_ms,
+        loop=0,
+    )
+
+    return buffer.getvalue()
+
+
+def _create_gif_request_handler(
+    gif_data: bytes,
+    fetched: Event,
+) -> type[BaseHTTPRequestHandler]:
+    class GifRequestHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path != _GIF_PATH:
+                self.send_error(404)
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "image/gif")
+            self.send_header("Content-Length", str(len(gif_data)))
+            self.end_headers()
+            self.wfile.write(gif_data)
+
+            fetched.set()
+
+        def log_message(
+            self,
+            format: str,
+            *args: object,
+        ) -> None:
+            pass
+
+    return GifRequestHandler
+
+
+def _resolve_local_address(device_host: str) -> str:
+    try:
+        with socket.socket(
+            socket.AF_INET,
+            socket.SOCK_DGRAM,
+        ) as connection:
+            connection.connect((device_host, 80))
+            local_address = connection.getsockname()[0]
+    except OSError as error:
+        raise TimesGateError(
+            f"Could not determine the local network address for Times Gate at {device_host}:"
+            f" {error}"
+        ) from error
+
+    return str(local_address)
 
 
 def _create_lcd_array(panel_index: int) -> list[int]:

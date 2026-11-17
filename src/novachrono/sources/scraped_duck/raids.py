@@ -69,6 +69,9 @@ def _parse_raid_roster(entries: list[Any]) -> RaidRoster:
 
 
 def _parse_raid_tier(value: Any) -> RaidTier | None:
+    if not isinstance(value, str):
+        return None
+
     if value in {"5-Star Raids", "Tier 5"}:
         return RaidTier.FIVE_STAR
 
